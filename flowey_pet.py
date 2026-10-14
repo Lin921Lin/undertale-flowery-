@@ -108,6 +108,9 @@ import random
 import re
 import sys
 import time
+import ctypes
+import ctypes.wintypes as ctypes_wintypes
+import winreg
 from datetime import datetime, date, timedelta
 
 from PyQt5.QtCore import (Qt, QTimer, QPoint, QRect, QSize, QUrl, pyqtSignal,
@@ -669,7 +672,8 @@ class AlarmDialog(QDialog):
             pass
         self._ddl_hint = QLabel(self)
         self._ddl_hint.setObjectName("hint")
-        self._ddl_hint.setStyleSheet("color:#9fd3ff;")
+        self._ddl_hint.setStyleSheet(
+            "color:#9fd3ff; font-size:15px; font-weight:bold; line-height:1.5;")
         self._ddl_hint.setWordWrap(True)
         tdl.addWidget(QLabel("待办事项：要做什么", self))
         tdl.addWidget(self._todo_text)
@@ -761,7 +765,7 @@ class AlarmDialog(QDialog):
             self._ddl_hint.setText("⏭  这个时间已经过了，白痴。")
         else:
             self._ddl_hint.setText(
-                "🕒  到期前 1 小时 和 10 分钟，我会来问你做完了没。")
+                "🕒  到期前 1 小时 和 10 分钟，flowey 会来问你做完了没。")
 
     def _try_accept(self):
         self._err.hide()
@@ -1212,6 +1216,7 @@ class FloweyPet(QWidget):
         self._face = "rest"            # rest / talk / wink / laugh / mimic / intro / sink
         self._speaking = False
         self._quitting = False
+        self._stealth = False          # 隐身：沉到最底层 + 素黄花 + 屏蔽交互
         self._bond_done = False
         self._start_ts = time.monotonic() * 1000.0
         self._last_interaction = self._start_ts
@@ -1271,6 +1276,7 @@ class FloweyPet(QWidget):
         self._init_drag()
         self._warn_missing_events()     # 台词脚本缺事件只警告不崩（协调用）
         self._sync_diary()          # 建好当天专属日记（空也先立起来）
+        self._set_autostart(True)   # 默认开机自启（点「退出」会取消）
 
     # ------------------------------------------------------------------
     # 状态文件（缩放持久化 + 反复开关计数）
@@ -2276,8 +2282,10 @@ class FloweyPet(QWidget):
         self._save_state(diaryNotes=notes[-DIARY_NOTE_MAX:])
 
     def _open_diary(self):
-        """打开专属日记：先让他以小花口吻评价一句（并写进日记批注），再开记事本。"""
+        """打开专属日记：开记事本后把花挪到日记簿正上方，再以小花口吻评价一句
+        （并写进日记批注）。"""
         line = self._lib.pick("diary_comment", force=True)
+        said = None
         if line is not None:
             today = date.today().isoformat()
             n = sum(1 for e in self._diary_log
@@ -2285,8 +2293,6 @@ class FloweyPet(QWidget):
             said = dict(line)
             said["text"] = line.get("text", "").replace(
                 "{n}", str(n) if n else "零")
-            if self._state == "idle" and not self._speaking and not self._quitting:
-                self._speak(said)
             self._add_diary_note(said["text"])     # 这句也留在日记里
         self._sync_diary()              # 先确保是最新的
         try:
@@ -2300,6 +2306,75 @@ class FloweyPet(QWidget):
                     subprocess.run(["xdg-open", DIARY_PATH])
             except Exception:
                 pass
+        # 稍等记事本窗口弹出，再把花移到日记簿上方说话
+        QTimer.singleShot(700, lambda: self._diary_popup(said))
+
+    def _find_window_rect(self, title_sub, class_name=None):
+        """ctypes 枚举顶层窗口，返回首个标题含 title_sub 的窗口矩形 (l,t,r,b)。
+        找不到 / 非 Windows / offscreen 时返回 None。"""
+        try:
+            user32 = ctypes.windll.user32
+        except Exception:
+            return None
+        if not hasattr(user32, "EnumWindows"):
+            return None
+        found = []
+
+        def enum_cb(hwnd, lparam):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length <= 0:
+                return True
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buf, length + 1)
+            title = buf.value or ""
+            cls = ctypes.create_unicode_buffer(256)
+            try:
+                user32.GetClassNameW(hwnd, cls, 256)
+            except Exception:
+                cls.value = ""
+            if (class_name is None or cls.value == class_name) and \
+               title_sub.lower() in title.lower():
+                rect = ctypes_wintypes.RECT()
+                if user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                    found.append((rect.left, rect.top,
+                                  rect.right, rect.bottom))
+                    return False
+            return True
+
+        CMP = ctypes.WINFUNCTYPE(ctypes_wintypes.BOOL,
+                                 ctypes_wintypes.HWND, ctypes_wintypes.LPARAM)
+        try:
+            user32.EnumWindows(CMP(enum_cb), 0)
+        except Exception:
+            return None
+        return found[0] if found else None
+
+    def _diary_popup(self, said, _attempt=0):
+        """记事本打开后：把花移到日记簿正上方，再说那句批注。
+
+        said 为 None 时只做「重新定位」（重试时不再重复说话）。
+        """
+        rect = self._find_window_rect("flowey_diary", class_name="Notepad")
+        if rect:
+            left, top, right, bottom = rect
+            scr = QApplication.primaryScreen().availableGeometry()
+            w, h = self.width(), self.height()
+            x = (left + right) // 2 - w // 2
+            x = max(scr.left() + 8, min(x, scr.right() - w - 8))
+            y = top - h - 12
+            if y < scr.top() + 8:           # 上方放不下就翻到下方
+                y = bottom + 12
+            self.move(x, y)
+            self.raise_()
+        if said is not None and not self._quitting:
+            if self._state == "idle" and not self._speaking:
+                self._speak(said)
+        # 记事本可能还没弹出来：先原地说话，再重试几次把花挪到日记上方
+        if rect is None and _attempt < 6:
+            QTimer.singleShot(400,
+                              lambda: self._diary_popup(None, _attempt + 1))
 
     def _ask_reminder(self):
         """右键「设置提醒…」：弹输入框 -> 挂提醒 / 挂待办 -> 让他回一句。"""
@@ -2477,6 +2552,8 @@ class FloweyPet(QWidget):
         now = time.monotonic() * 1000.0
         # 进程扫描无论忙闲都要跑：就算此刻在说话，也要记录「出现了」这个事实
         self._monitor_tick(now)
+        if self._stealth:               # 隐身：完全静默，不说话/不游荡/不变脸
+            return
         if self._state != "idle" or self._speaking or self._quitting:
             return
         cfg = self._lib.config["events"]
@@ -2846,6 +2923,8 @@ class FloweyPet(QWidget):
         self._press_ts = 0.0
 
     def mousePressEvent(self, event):
+        if self._stealth:                 # 隐身：左键拖拽 / 戳完全不响应
+            return
         if event.button() != Qt.LeftButton:
             return
         self._pressed_in_wander = (self._state == "wander")
@@ -2866,6 +2945,8 @@ class FloweyPet(QWidget):
             event.accept()
 
     def mouseReleaseEvent(self, event):
+        if self._stealth:
+            return
         if event.button() != Qt.LeftButton or not self._dragging:
             return
         self._dragging = False
@@ -2999,6 +3080,16 @@ class FloweyPet(QWidget):
             a_sfx.setEnabled(False)
         a_hush = QAction("闭嘴", self)
         a_quit = QAction("退出", self)
+        a_stealth = QAction(
+            "取消隐身" if self._stealth else "隐身", self)
+        a_stealth.triggered.connect(
+            lambda: self._set_stealth(not self._stealth))
+        a_auto = QAction(
+            "开机启动：%s" % ("开" if self._autostart_enabled() else "关"), self)
+        a_auto.setCheckable(True)
+        a_auto.setChecked(self._autostart_enabled())
+        a_auto.triggered.connect(
+            lambda _checked: self._set_autostart(a_auto.isChecked()))
 
         size_menu = PetMenu("大小 · %.1f×" % self._scale, menu)
         size_menu.setStyleSheet(MENU_QSS)
@@ -3043,14 +3134,17 @@ class FloweyPet(QWidget):
             menu.addAction(remind_menu.menuAction())
         menu.addAction(a_remind)
         menu.addAction(a_book)
+        menu.addAction(a_stealth)
         menu.addAction(a_music)
         menu.addAction(a_sfx)
         menu.addMenu(size_menu)
+        menu.addAction(a_auto)
         menu.addAction(a_hush)
         menu.addSeparator()
         menu.addAction(a_quit)
         return menu, {"say": a_say, "music": a_music, "sfx": a_sfx,
-                      "hush": a_hush, "quit": a_quit}
+                      "hush": a_hush, "quit": a_quit,
+                      "stealth": a_stealth, "auto": a_auto}
 
     def _random_chat(self):
         """手动触发（右键「说点什么」，忽略冷却）。
@@ -3070,11 +3164,83 @@ class FloweyPet(QWidget):
         if self._quitting:
             return
         self._quitting = True
+        self._set_autostart(False)        # 主动退出 -> 取消开机自启
         line = self._lib.pick("shutdown", force=True)
         if line:
             self._speak(line)
         else:
             self._start_outro()
+
+    # ------------------------------------------------------------------
+    # 隐身（stealth）：变回素黄花、沉到桌面最底层、屏蔽用户交互
+    # ------------------------------------------------------------------
+    def _set_stealth(self, on):
+        """开启：去掉置顶、沉到最底层、收起眼睛变素黄花、屏蔽拖拽/点击。
+        关闭：恢复置顶 + 眼睛 + 交互。右键菜单始终可用（用于取消隐身）。"""
+        on = bool(on)
+        if on == self._stealth:
+            return
+        self._stealth = on
+        pos = self.pos()
+        if on:
+            flags = (Qt.FramelessWindowHint | Qt.WindowStaysOnBottomHint
+                     | Qt.Tool | Qt.NoDropShadowWindowHint)
+            self._eyes_label.hide()          # 素黄花：不画眼睛
+        else:
+            flags = (Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+                     | Qt.Tool | Qt.NoDropShadowWindowHint)
+        self.setWindowFlags(flags)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setWindowTitle("Flowey")
+        self.move(pos)
+        self.show()
+        if on:
+            self.lower()                    # 压到桌面最底层
+        else:
+            self.raise_()
+            self._update_eyes()             # 恢复眼睛
+
+    # ------------------------------------------------------------------
+    # 开机自启（默认开；点「退出」会取消）
+    # ------------------------------------------------------------------
+    def _autostart_enabled(self):
+        if sys.platform != "win32":
+            return False
+        try:
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0, winreg.KEY_QUERY_VALUE)
+            try:
+                winreg.QueryValueEx(key, "FloweyPet")
+                return True
+            except FileNotFoundError:
+                return False
+            finally:
+                winreg.CloseKey(key)
+        except Exception:
+            return False
+
+    def _set_autostart(self, on):
+        if sys.platform != "win32":
+            return
+        path = os.path.join(BASE_DIR, "start_pet.bat")
+        try:
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0, winreg.KEY_SET_VALUE)
+            if on:
+                winreg.SetValueEx(key, "FloweyPet", 0,
+                                  winreg.REG_SZ, '"%s"' % path)
+            else:
+                try:
+                    winreg.DeleteValue(key, "FloweyPet")
+                except FileNotFoundError:
+                    pass
+            winreg.CloseKey(key)
+        except Exception:
+            pass
 
 
 def main():
