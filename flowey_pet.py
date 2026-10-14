@@ -111,6 +111,7 @@ import time
 import ctypes
 import ctypes.wintypes as ctypes_wintypes
 import winreg
+import threading
 from datetime import datetime, date, timedelta
 
 from PyQt5.QtCore import (Qt, QTimer, QPoint, QRect, QSize, QUrl, pyqtSignal,
@@ -120,7 +121,7 @@ from PyQt5.QtGui import (QPixmap, QMovie, QPainter, QPainterPath, QColor,
 from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QMenu, QAction,
                              QStyle, QDialog, QVBoxLayout, QHBoxLayout,
                              QLineEdit, QSpinBox, QDialogButtonBox, QTabWidget,
-                             QTimeEdit, QDateTimeEdit, QPushButton)
+                             QTimeEdit, QDateTimeEdit, QPushButton, QTextEdit)
 
 try:
     from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent, QSoundEffect
@@ -128,6 +129,13 @@ try:
 except ImportError:                              # 某些精简环境缺 QtMultimedia
     HAS_MULTIMEDIA = False
     QSoundEffect = None
+
+# LLM 能力层（密钥加载 / 人设组装 / DeepSeek 调用），与调试台共用。
+# 拿不到就退化成纯台词库模式 —— 桌宠不能因为少了这个模块就起不来。
+try:
+    import flowey_llm as LLM
+except Exception:
+    LLM = None
 
 # ---------------------------------------------------------------------------
 # 配置
@@ -247,6 +255,13 @@ TODO_ASK_TEN_SEC = 600              # DDL 前 10 分钟
 # 日记：Flowey 专属的 .txt，自动同步「当天定的提醒与待办」，用电脑自带记事本打开
 DIARY_PATH = os.path.join(BASE_DIR, "flowey_diary.txt")
 DIARY_NOTE_MAX = 5                  # 日记末尾「Flowey 批注」最多留几条
+
+# 主动搭话（AI 对话）：翻你的待办 + 看你在干嘛，聊 2~3 个回合就收
+CONVO_IDLE_MS = 240000              # 空闲多久才主动开口（4 分钟）
+CONVO_COOLDOWN_MS = 1200000         # 两次搭话之间的冷却（20 分钟）
+CONVO_DILEMMA_P = 0.5               # 收尾时抛出「二选一」局面的概率
+CONVO_MAX_ROUNDS = 3                # 一次对话最多几个来回（超了就停）
+LLM_HISTORY_MAX = 8                 # LLM 上下文保留条数（多了白烧 token）
 
 # 眼球跟随鼠标（待机 rest 脸专用）：眼睛图层整体小幅平移。
 # 幅度以 96x120 素材像素计：眼睛底边 y40、嘴顶 y43，往下最多挪 1px 就贴嘴了，
@@ -1063,6 +1078,209 @@ class TodoCheckDialog(QDialog):
         else:
             super().keyPressEvent(event)
 
+
+class ConvoChoiceDialog(QDialog):
+    """AI 搭话用的 UT 二选一框（外观与 TodoCheckDialog 同一套）。
+
+    两个选项由调用方给：可以是固定的「解释一下 / 不用，你猜」，
+    也可以是 LLM 现抛的 dilemma 两个选项。
+    exec_() 返回 0 / 1；Esc 或关掉返回 None（= 不理他）。
+    """
+
+    SEL_YELLOW = "#ffd34d"      # 选中项像素字变黄（UT 黄）
+
+    def __init__(self, question, opt_a, opt_b, parent=None):
+        super().__init__(parent, Qt.FramelessWindowHint
+                         | Qt.WindowStaysOnTopHint | Qt.Tool
+                         | Qt.NoDropShadowWindowHint)
+        self.setStyleSheet(UTBOX_QSS)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setModal(True)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.OPTS = (opt_a, opt_b)
+        self._sel = 0
+        self._choice = None
+        QApplication.instance().installEventFilter(self)
+
+        q = QLabel(question, self)
+        q.setWordWrap(True)
+        q.setFont(QFont("Microsoft YaHei", 13))
+        q.setStyleSheet("color:#f0f0f0;")
+
+        self._opts = []
+        orow = QHBoxLayout()
+        orow.setSpacing(56)
+        for i in range(2):
+            lab = _ClickLabel(i, self._pick, self)
+            orow.addWidget(lab)
+            self._opts.append(lab)
+        orow.addStretch(1)
+
+        tip = QLabel("← → 选择，回车 / 点击 确定，Esc 不理他", self)
+        tip.setStyleSheet("color:#8a8a94; font-size:11px;")
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(32, 26, 32, 22)
+        lay.addWidget(q)
+        lay.addSpacing(22)
+        lay.addLayout(orow)
+        lay.addSpacing(10)
+        lay.addWidget(tip)
+        self._refresh()
+
+    def _refresh(self):
+        for i, lab in enumerate(self._opts):
+            sel = (i == self._sel)
+            heart = _render_pixel_grid(HEART_ROWS, 18,
+                                       HEART_RGB if sel else None)
+            txt = _pixel_text_pixmap(self.OPTS[i],
+                                     self.SEL_YELLOW if sel else "#f0f0f0",
+                                     px=15, scale=2)
+            w = heart.width() + 8 + txt.width()
+            h = max(heart.height(), txt.height())
+            pm = QPixmap(w, h)
+            pm.fill(Qt.transparent)
+            p = QPainter(pm)
+            p.drawPixmap(0, (h - heart.height()) // 2, heart)
+            p.drawPixmap(heart.width() + 8, (h - txt.height()) // 2, txt)
+            p.end()
+            lab.setPixmap(pm)
+
+    def _pick(self, i):
+        self._sel = i
+        self._refresh()
+        self._confirm()
+
+    def _confirm(self):
+        self._choice = self._sel
+        self.accept()
+
+    def exec_(self):
+        super().exec_()
+        return self._choice
+
+    def showEvent(self, ev):
+        super().showEvent(ev)
+        # 同 TodoCheckDialog：Qt.Tool 无边框窗弹出后要强制抢焦点，否则键盘失灵
+        QTimer.singleShot(0, self._grab_focus)
+
+    def _grab_focus(self):
+        self.activateWindow()
+        self.raise_()
+        self.setFocus(Qt.OtherFocusReason)
+
+    def eventFilter(self, obj, ev):
+        if ev.type() == QEvent.KeyPress and (obj is self or self.isAncestorOf(obj)):
+            self.keyPressEvent(ev)
+            return True
+        return super().eventFilter(obj, ev)
+
+    def mousePressEvent(self, ev):
+        if ev.button() == Qt.LeftButton:
+            self._confirm()
+        else:
+            super().mousePressEvent(ev)
+
+    def keyPressEvent(self, event):
+        k = event.key()
+        if k in (Qt.Key_Left, Qt.Key_Up):
+            self._sel = 0
+            self._refresh()
+        elif k in (Qt.Key_Right, Qt.Key_Down):
+            self._sel = 1
+            self._refresh()
+        elif k in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self._confirm()
+        elif k == Qt.Key_Escape:
+            self.reject()
+        else:
+            super().keyPressEvent(event)
+
+
+CONVO_INPUT_QSS = """
+QDialog { background:#000; border:4px solid #ffffff; }
+QLabel  { color:#f0f0f0; background:transparent; font-size:13px; }
+QTextEdit {
+    background:#101014; color:#f0f0f0; border:2px solid #ffffff;
+    font-size:13px; padding:6px; selection-background-color:#ffd34d;
+}
+QPushButton {
+    background:#101014; color:#f0f0f0; border:2px solid #ffffff;
+    font-size:12px; padding:5px 18px; min-width:64px;
+}
+QPushButton:hover   { background:#24242c; }
+QPushButton:pressed { background:#ffd34d; color:#000000; }
+"""
+
+
+class ConvoInputDialog(QDialog):
+    """解释待办时让你敲两句：黑底白框 + 多行输入。
+
+    exec_() 返回输入文本；空着或取消返回 None（= 不解释）。
+    """
+
+    def __init__(self, title, hint="", parent=None):
+        super().__init__(parent, Qt.FramelessWindowHint
+                         | Qt.WindowStaysOnTopHint | Qt.Tool
+                         | Qt.NoDropShadowWindowHint)
+        self.setStyleSheet(CONVO_INPUT_QSS)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setModal(True)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self._text = None
+
+        t = QLabel(title, self)
+        t.setWordWrap(True)
+        t.setFont(QFont("Microsoft YaHei", 13))
+        t.setStyleSheet("color:#ffd34d; font-size:14px;")   # 标题用 UT 黄
+
+        self._edit = QTextEdit(self)
+        self._edit.setPlaceholderText("随便写两句就行……")
+        self._edit.setMinimumHeight(96)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        btns.button(QDialogButtonBox.Ok).setText("就这句")
+        btns.button(QDialogButtonBox.Cancel).setText("算了")
+        btns.accepted.connect(self._ok)
+        btns.rejected.connect(self.reject)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(28, 22, 28, 20)
+        lay.setSpacing(10)
+        lay.addWidget(t)
+        if hint:
+            hl = QLabel(hint, self)
+            hl.setWordWrap(True)
+            hl.setStyleSheet("color:#8a8a94; font-size:11px;")
+            lay.addWidget(hl)
+        lay.addWidget(self._edit)
+        lay.addWidget(btns, 0, Qt.AlignRight)
+        QTimer.singleShot(0, self._grab_focus)
+
+    def _grab_focus(self):
+        self.activateWindow()
+        self.raise_()
+        self._edit.setFocus()
+
+    def _ok(self):
+        self._text = (self._edit.toPlainText() or "").strip() or None
+        self.accept()
+
+    def exec_(self):
+        super().exec_()
+        return self._text
+
+    def keyPressEvent(self, event):
+        # Ctrl+回车 / Ctrl+Enter = 确定（普通回车留给换行）
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter) and \
+                (event.modifiers() & Qt.ControlModifier):
+            self._ok()
+            return
+        if event.key() == Qt.Key_Escape:
+            self.reject()
+            return
+        super().keyPressEvent(event)
+
     def choice(self):
         """True=完成 / False=未完成 / None=没回答（Esc）。"""
         return self._choice
@@ -1210,6 +1428,9 @@ class SpeechBubble(QWidget):
 class FloweyPet(QWidget):
     PRESET_SIZES = [("小 2×", 2.0), ("中 3×", 3.0), ("大 4×", 4.0), ("特大 6×", 6.0)]
 
+    # 后台线程算完 LLM -> 主线程（Qt 会自动排成队列，子线程里绝不能碰 UI）
+    llm_reply = pyqtSignal(object)
+
     def __init__(self):
         super().__init__()
         self._state = "intro"          # intro -> idle -> wander -> outro
@@ -1241,6 +1462,19 @@ class FloweyPet(QWidget):
         self._todos = []               # 待办事项：[{id, text, ddl(墙钟秒), done, asked_hour, asked_ten}]
         self._todo_seq = 0
         self._diary_log = []           # 当天定的提醒/待办流水（含已响/已取消/已完成），供日记同步
+
+        # LLM（DeepSeek）搭话：翻你的待办 + 看你在干嘛，主动跟你聊几句
+        self._llm = None               # None=还没试过 / False=不可用 / dict=可用
+        self._llm_history = []         # 短期上下文
+        self._todo_explain = {}        # 待办 id -> 你解释过的说明（以后对话要用）
+        self._convo_active = False
+        self._convo_steps = []
+        self._convo_i = 0
+        self._convo_round = 0
+        self._convo_last = 0.0
+        self._convo_auto = True        # 自动搭话总开关（右键菜单可关）
+        self._speak_done_cb = None     # 一句话说完后的回调（对话链路靠它串起来）
+        self.llm_reply.connect(self._on_llm_reply)
 
         # 被反复戳/拽 -> 概率钻走反抗（先甩一句 poke_spam 再钻）
         self._pressed_in_wander = False
@@ -1898,6 +2132,11 @@ class FloweyPet(QWidget):
         if evil and not entered_ow:
             self._set_face("evil")
             self._evil_timer.start(EVIL_HOLD_MS)
+        # AI 搭话链路：这句话说完 -> 接着走下一步（_start_convo 用）
+        if self._speak_done_cb is not None:
+            cb = self._speak_done_cb
+            self._speak_done_cb = None
+            cb()
         # 说完一句就顺手看看有没有被挡住的提醒要补说（提醒别迟到太久）
         if self._reminders and not self._quitting:
             QTimer.singleShot(0, self._reminder_tick)
@@ -2352,8 +2591,12 @@ class FloweyPet(QWidget):
         return found[0] if found else None
 
     def _diary_popup(self, said, _attempt=0):
-        """记事本打开后：把花移到日记簿正上方，再说那句批注。
+        """记事本打开后：把花挪到日记簿上沿「探出个脑袋」，再说那句批注。
 
+        定位不是整个悬空飘在窗口上方，而是让花的
+          · 上面 60% 露在记事本上边线之上
+          · 下面 40% 压在日记页面里
+        看起来就像从本子里探头出来。
         said 为 None 时只做「重新定位」（重试时不再重复说话）。
         """
         rect = self._find_window_rect("flowey_diary", class_name="Notepad")
@@ -2363,9 +2606,10 @@ class FloweyPet(QWidget):
             w, h = self.width(), self.height()
             x = (left + right) // 2 - w // 2
             x = max(scr.left() + 8, min(x, scr.right() - w - 8))
-            y = top - h - 12
-            if y < scr.top() + 8:           # 上方放不下就翻到下方
-                y = bottom + 12
+            # 探头上沿：60% 露在外面，40% 压在页面上
+            y = top - int(h * 0.6)
+            if y < scr.top() + 8:           # 上方放不下就翻到下方，同理探头
+                y = bottom - int(h * 0.4)
             self.move(x, y)
             self.raise_()
         if said is not None and not self._quitting:
@@ -2577,6 +2821,12 @@ class FloweyPet(QWidget):
         if (now - self._last_interaction >= neglect_ms
                 and now - self._last_wander >= WANDER_COOLDOWN_MS):
             self._start_wander(now)
+
+        # 空闲够久 -> 主动搭话（AI）。受总开关与冷却双重限制，不会刷屏。
+        if (self._convo_auto and not self._convo_active
+                and now - self._last_interaction >= CONVO_IDLE_MS
+                and now - self._convo_last >= CONVO_COOLDOWN_MS):
+            self._start_convo()
 
     # ------------------------------------------------------------------
     # 冷落游荡：钻地 -> 屏幕上几处冒头看看 -> 到鼠标光标旁说话
@@ -2990,6 +3240,8 @@ class FloweyPet(QWidget):
             return
         if chosen is acts["say"]:
             self._random_chat()
+        elif chosen is acts["convo"]:
+            QTimer.singleShot(0, self._start_convo)
         elif chosen is acts["music"]:
             self._bgm_toggle(acts["music"].isChecked())
         elif chosen is acts["sfx"]:
@@ -3068,6 +3320,13 @@ class FloweyPet(QWidget):
         menu.setStyleSheet(MENU_QSS)
 
         a_say = QAction("说点什么", self)
+        a_convo = QAction("聊两句（AI）", self)   # 立刻开一轮：翻待办 + 点评你在干嘛
+        a_convo_auto = QAction("自动搭话", self)   # 空闲久了自动开口（关闭则只手动）
+        a_convo_auto.setCheckable(True)
+        a_convo_auto.setChecked(self._convo_auto)
+        a_convo_auto.triggered.connect(
+            lambda _checked: setattr(self, "_convo_auto",
+                                     a_convo_auto.isChecked()))
         a_music = QAction("音乐：%s" % ("开" if self._music_on else "关"), self)
         a_music.setCheckable(True)
         a_music.setChecked(self._music_on)
@@ -3130,6 +3389,8 @@ class FloweyPet(QWidget):
                     lambda _c, rid=t["id"]: self._cancel_todo(rid))
 
         menu.addAction(a_say)
+        menu.addAction(a_convo)
+        menu.addAction(a_convo_auto)
         if remind_menu is not None:
             menu.addAction(remind_menu.menuAction())
         menu.addAction(a_remind)
@@ -3142,8 +3403,8 @@ class FloweyPet(QWidget):
         menu.addAction(a_hush)
         menu.addSeparator()
         menu.addAction(a_quit)
-        return menu, {"say": a_say, "music": a_music, "sfx": a_sfx,
-                      "hush": a_hush, "quit": a_quit,
+        return menu, {"say": a_say, "convo": a_convo, "music": a_music,
+                      "sfx": a_sfx, "hush": a_hush, "quit": a_quit,
                       "stealth": a_stealth, "auto": a_auto}
 
     def _random_chat(self):
@@ -3158,6 +3419,256 @@ class FloweyPet(QWidget):
                 ["double_click", "drag", "idle", "peek", "restart"], 5):
             if self._trigger_event(event, force=True):
                 return
+
+    # ------------------------------------------------------------------
+    # LLM（DeepSeek）搭话：翻你的待办 + 看你在干嘛，主动聊 2~3 个回合
+    # ------------------------------------------------------------------
+    def _ensure_llm(self):
+        """懒加载密钥与人设。可用返回 True，不可用（没模块 / 没 key）返回 False。
+
+        结果缓存在 self._llm：None=还没试过 / False=不可用 / dict=可用。
+        """
+        if self._llm is None:
+            if LLM is None:
+                self._llm = False
+                return False
+            try:
+                cfg = LLM.load_config()
+                if cfg is None:                 # 没 key / key 无效
+                    self._llm = False
+                    return False
+                self._llm = {
+                    "cfg": cfg,
+                    "system": LLM.build_system_prompt(
+                        LLM.load_persona(),
+                        LLM.load_line_samples(sample_per_event=2),
+                        LLM.load_lines_meta(),
+                        free_chat=True),
+                }
+            except Exception:
+                self._llm = False
+        return isinstance(self._llm, dict)
+
+    def _llm_ask_async(self, prompt, temperature=1.05, on_done=None):
+        """后台线程调 LLM，回到主线程再回调 on_done(obj_or_None)。
+
+        一次请求可能好几秒，绝不能卡在 UI 线程上（否则整个桌宠会僵住）。
+        """
+        if on_done is None:
+            return
+        if not self._ensure_llm():
+            QTimer.singleShot(0, lambda: on_done(None))
+            return
+
+        cfg = self._llm["cfg"]
+        system = self._llm["system"]
+        history = list(self._llm_history)
+
+        def work():
+            try:
+                messages = ([{"role": "system", "content": system}]
+                            + history
+                            + [{"role": "user", "content": prompt}])
+                content, _u = LLM.call_llm(cfg, messages, temperature)
+                obj = LLM.parse_reply(content)
+            except Exception:
+                obj = None
+            # 子线程没有 Qt 事件循环（在那里 QTimer.singleShot 永远不会触发），
+            # 所以走信号：Qt 会把这次 emit 排进主线程的事件队列。
+            self.llm_reply.emit((prompt, obj, on_done))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_llm_reply(self, payload):
+        """主线程：接住后台线程算完的结果，再往下走。"""
+        prompt, obj, on_done = payload
+        self._llm_done(prompt, obj, on_done)
+
+    def _llm_done(self, prompt, obj, on_done):
+        """回到主线程：存上下文，把空/脏结果统一成 None 再交给回调。"""
+        text = str(obj.get("text", "")).strip() if isinstance(obj, dict) else ""
+        if not text:
+            obj = None
+        else:
+            self._llm_history.append({"role": "user", "content": prompt})
+            self._llm_history.append(
+                {"role": "assistant",
+                 "content": json.dumps(obj, ensure_ascii=False)})
+            if len(self._llm_history) > LLM_HISTORY_MAX:
+                self._llm_history = self._llm_history[-LLM_HISTORY_MAX:]
+        on_done(obj)
+
+    def _get_activity(self):
+        """读「你在干嘛」：前台窗口标题 + 正在跑的几类进程。读不到就返回 ''。"""
+        parts = []
+        try:
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetForegroundWindow()
+            n = user32.GetWindowTextLengthW(hwnd)
+            if n and n > 0:
+                buf = ctypes.create_unicode_buffer(n + 1)
+                user32.GetWindowTextW(hwnd, buf, n + 1)
+                title = (buf.value or "").strip()
+                if title:
+                    parts.append("当前窗口：" + title[:60])
+        except Exception:
+            pass
+        try:
+            if self._psutil is not None and self._proc_targets:
+                names = set()
+                for p in self._psutil.process_iter(["name"]):
+                    nm = p.info.get("name")
+                    if nm:
+                        names.add(nm.lower())
+                hits = [ev for ev, targets in self._proc_targets.items()
+                        if names & targets]
+                if hits:
+                    parts.append("在跑：" + "、".join(sorted(hits)[:5]))
+        except Exception:
+            pass
+        return "；".join(parts)
+
+    # ---- 搭话主流程 -------------------------------------------------
+    def _start_convo(self):
+        """开一轮搭话：
+          ① 待办里挑一条还没解释过的，问你要不要解释（解释就让你敲字）
+          ② 读一下你在干嘛，点评一句
+          ③ 有概率抛个局面让你二选一
+        一共不超过 CONVO_MAX_ROUNDS 个来回。
+        """
+        if self._stealth or self._quitting or self._convo_active:
+            return
+        if self._state != "idle" or self._speaking:
+            return
+
+        steps = []
+        todo = next((t for t in self._todos
+                     if not t.get("done") and t["id"] not in self._todo_explain),
+                    None)
+        if todo is not None:
+            steps.append(("todo", todo))
+        steps.append(("activity", None))
+        if random.random() < CONVO_DILEMMA_P:
+            steps.append(("dilemma", None))
+
+        self._convo_active = True
+        self._convo_steps = steps
+        self._convo_i = 0
+        self._convo_round = 0
+        self._convo_next()
+
+    def _convo_next(self):
+        """走下一步；走完（或退出中）就收工。"""
+        if self._quitting:
+            self._convo_active = False
+            return
+        if (self._convo_i >= len(self._convo_steps)
+                or self._convo_round >= CONVO_MAX_ROUNDS):
+            self._convo_active = False
+            self._convo_last = time.monotonic() * 1000.0
+            return
+        kind, data = self._convo_steps[self._convo_i]
+        self._convo_i += 1
+        self._convo_round += 1
+        if kind == "todo":
+            self._convo_todo(data)
+        elif kind == "activity":
+            self._convo_activity()
+        elif kind == "dilemma":
+            self._convo_dilemma()
+        else:
+            self._convo_next()
+
+    def _convo_speak(self, obj, fallback):
+        """说一句 LLM 生成的话；生成失败就用兜底台词。说完自动接下一步。"""
+        line = obj if (isinstance(obj, dict) and obj.get("text")) else \
+            {"text": fallback, "tone": "venom"}
+        self._speak_done_cb = self._convo_next
+        self._speak(line)
+
+    def _convo_todo(self, todo):
+        """「你这待办写的到底是啥？」—— 解释就让你敲字，不解释也随你。"""
+        dlg = ConvoChoiceDialog(
+            "你挂了这么一条：\n「%s」\n……所以这到底是要干嘛？" % todo["text"],
+            "解释一下", "不用，你猜")
+        idx = dlg.exec_()
+        if idx is None:                     # 不理他 -> 直接进入下一步
+            self._convo_next()
+            return
+        if idx == 1:
+            self._convo_speak(
+                None, "行吧。反正到时候没做完，难看的也不是我。")
+            return
+        # 选了「解释一下」-> 弹输入框让你敲两句
+        dlg2 = ConvoInputDialog(
+            "说说「%s」是啥" % todo["text"],
+            "写两句就行 —— 这句会进日记，以后我就照这个问你了。")
+        text = dlg2.exec_()
+        if not text:
+            self._convo_next()
+            return
+        # 存两份：内存里给本次及以后的对话用，同时写进日记（重启后也留着）
+        self._todo_explain[todo["id"]] = text
+        self._add_diary_note("关于「%s」：%s" % (todo["text"], text))
+        self._llm_ask_async(
+            "用户刚跟我解释了他的待办「%s」：%s。用一句话回应，"
+            "带上你惯有的阴阳怪气，别感谢、别鼓励，≤30 字。只回 JSON。"
+            % (todo["text"], text),
+            on_done=lambda obj: self._convo_speak(
+                obj, "哦。记下了，到时候别装不认识。"))
+
+    def _convo_activity(self):
+        """读一下你在干嘛，然后点评一句。"""
+        activity = self._get_activity()
+        todos = [t["text"] for t in self._todos if not t.get("done")]
+        known = "；".join("%s（%s）" % (t["text"], self._todo_explain[t["id"]])
+                          for t in self._todos
+                          if t["id"] in self._todo_explain)
+        prompt = (
+            "你正隔着屏幕看他。\n"
+            "他的待办：%s\n"
+            "他已经解释过的部分：%s\n"
+            "他此刻在干嘛：%s\n"
+            "挑一件事阴阳怪气地点评一句（≤35 字，不许复述台词样本）。只回 JSON。"
+            % ("、".join(todos[:5]) or "没挂待办",
+               known[:120] or "他没解释过",
+               activity or "看不出来"))
+        self._llm_ask_async(
+            prompt,
+            on_done=lambda obj: self._convo_speak(
+                obj, "行啊，忙你的。反正账我记着呢。"))
+
+    def _convo_dilemma(self):
+        """有概率抛个局面让你二选一，然后嘲你的选择。"""
+        todos = [t["text"] for t in self._todos if not t.get("done")]
+        activity = self._get_activity()
+        self._llm_ask_async(
+            "给他抛一个二选一的小局面，跟他的待办（%s）或他正在做的事"
+            "（%s）有关，两个选项要明显对立、最好都带点坑。\n"
+            "只回 JSON：{\"q\":\"问题\",\"a\":\"选项一\",\"b\":\"选项二\"}，"
+            "每项 6~16 字。"
+            % ("、".join(todos[:3]) or "没挂待办", activity or "看不出来"),
+            on_done=self._convo_dilemma_show)
+
+    def _convo_dilemma_show(self, obj):
+        q = a = b = ""
+        if isinstance(obj, dict):
+            q = str(obj.get("q", "")).strip()
+            a = str(obj.get("a", "")).strip()
+            b = str(obj.get("b", "")).strip()
+        if not (q and a and b):
+            self._convo_next()          # 没生成出来就算了，不硬凑
+            return
+        idx = ConvoChoiceDialog(q, a, b).exec_()
+        if idx is None:
+            self._convo_next()
+            return
+        picked = a if idx == 0 else b
+        self._llm_ask_async(
+            "你刚给他出了个二选一：「%s」，他选了「%s」。"
+            "就他这个选择嘲一句（≤30 字）。只回 JSON。" % (q, picked),
+            on_done=lambda obj2: self._convo_speak(
+                obj2, "啧，意料之中。"))
 
     def _quit_with_farewell(self):
         """退出：先说 shutdown 台词，说完 _end_speak 会转钻地退场再退出。"""

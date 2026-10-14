@@ -36,12 +36,15 @@ try:
 except Exception:
     pass
 
-ROOT = Path(__file__).resolve().parent
-KEY_FILE = ROOT / "secrets.local.json"
-TEMPLATE_FILE = ROOT / "secrets.template.json"
-PERSONA_FILE = ROOT / "persona.md"
-LINES_FILE = ROOT / "lines.json"
-LOG_DIR = ROOT / "chat_logs"
+# LLM 能力（密钥加载 / 人设组装 / DeepSeek 调用）统一放在 flowey_llm.py，
+# 桌宠 flowey_pet.py 与调试台共用同一套人设，避免两份实现漂移。
+import flowey_llm as LLM
+from flowey_llm import (load_config, load_persona, load_lines_meta,
+                        load_line_samples, build_system_prompt,
+                        call_llm, parse_reply)
+
+ROOT = LLM.ROOT
+LOG_DIR = LLM.LOG_DIR
 
 _NO_COLOR = os.environ.get("NO_COLOR") or not sys.stdout.isatty()
 
@@ -57,90 +60,8 @@ C_RED = _c("\033[91m")
 C_RST = _c("\033[0m")
 
 
-# ---------------------------------------------------------------- 配置加载
-def load_config() -> dict:
-    """优先级：环境变量 > secrets.local.json"""
-    if not KEY_FILE.exists():
-        raise SystemExit(
-            f"{C_RED}[×] 找不到密钥文件：{KEY_FILE}\n"
-            f"    复制 {TEMPLATE_FILE.name} 为 secrets.local.json 并填入 key。{C_RST}"
-        )
-    try:
-        cfg = json.loads(KEY_FILE.read_text(encoding="utf-8"))
-    except Exception as e:
-        raise SystemExit(f"{C_RED}[×] 密钥文件格式错误：{e}{C_RST}")
-
-    key = os.environ.get("DEEPSEEK_API_KEY") or cfg.get("deepseek_api_key", "")
-    key = (key or "").strip()
-    if not key or key.startswith("sk-填") or len(key) < 20:
-        raise SystemExit(
-            f"{C_RED}[×] 密钥为空或无效，请检查 {KEY_FILE.name} 里的 deepseek_api_key。{C_RST}"
-        )
-    return {
-        "api_key": key,
-        "base_url": (cfg.get("deepseek_base_url") or "https://api.deepseek.com").rstrip("/"),
-        "model": cfg.get("deepseek_model") or "deepseek-chat",
-    }
-
-
-# ---------------------------------------------------------------- 素材加载
-def load_persona() -> str:
-    if not PERSONA_FILE.exists():
-        print(f"{C_DIM}[!] 未找到 persona.md，仅用内置兜底人设{C_RST}")
-        return "你是 Flowey，一朵没有灵魂的金色小花。信条：在这个世界上，不是杀就是被杀。"
-    return PERSONA_FILE.read_text(encoding="utf-8").strip()
-
-
-def load_lines_meta() -> dict:
-    """读 foci / 语气枚举 / speechNotes / 禁词"""
-    if not LINES_FILE.exists():
-        return {"tones": {}, "notes": [], "forbidden": []}
-    data = json.loads(LINES_FILE.read_text(encoding="utf-8"))
-    ch = data.get("character", {}) or {}
-    tone_raw = ch.get("toneEnum") or {}
-    tones: dict[str, str] = {}
-    if isinstance(tone_raw, dict):
-        tones = {k: str(v) for k, v in tone_raw.items()}
-    elif isinstance(tone_raw, list):
-        tones = {t: "" for t in tone_raw}
-    return {
-        "tones": tones,
-        "notes": [str(x) for x in (ch.get("speechNotes") or [])],
-        "forbidden": [str(x) for x in (ch.get("forbiddenWords") or [])],
-    }
-
-
-def load_line_samples(sample_per_event: int = 2, seed: int = 7, enabled: bool = True) -> str:
-    """从 lines.json 抽样台词做风格校准。返回格式化文本"""
-    if not enabled or not LINES_FILE.exists():
-        return ""
-    data = json.loads(LINES_FILE.read_text(encoding="utf-8"))
-    rng = random.Random(seed)
-
-    events = data.get("events", {}) or {}
-    blocks: list[str] = []
-    total = 0
-    for ev_name, ev in events.items():
-        ev_lines = (ev or {}).get("lines") or []
-        if not isinstance(ev_lines, list) or not ev_lines:
-            continue
-        desc = (ev or {}).get("displayName", ev_name)
-        picks = ev_lines if sample_per_event >= len(ev_lines) else rng.sample(ev_lines, sample_per_event)
-        rows = []
-        for it in picks:
-            tone = it.get("tone", "")
-            text = it.get("text", "").replace("\n", " ")
-            if text:
-                rows.append(f"  [{tone}] {text}")
-                total += 1
-        if rows:
-            blocks.append(f"## {ev_name}（{desc}）\n" + "\n".join(rows))
-
-    header = (
-        f"以下是角色真实台词样本（共 {total} 句，来自 {len(blocks)} 类事件）。\n"
-        "它们只用于校准语气与句式，**禁止原样复述**，你必须即兴生成全新的话。"
-    )
-    return header + "\n\n" + "\n\n".join(blocks)
+# （load_config / load_persona / load_lines_meta / load_line_samples 已迁到
+#  flowey_llm.py，本文件顶部 import 复用，桌宠与调试台共用同一份实现。）
 
 
 # ------------------------------------------------------- OOC 校验（本地护栏）
@@ -165,105 +86,8 @@ def lint(text: str, forbidden: list[str]) -> list[str]:
     return hits
 
 
-def build_system_prompt(persona: str, lines_block: str, meta: dict, free_chat: bool) -> str:
-    tones: dict[str, str] = meta.get("tones", {})
-    tone_lines = "\n".join(f"- `{k}`：{v}" for k, v in tones.items()) or "见 persona.md 语气阶梯"
-    tone_names = "、".join(f"`{k}`" for k in tones) or "venom"
-    notes = "\n".join(f"- {n}" for n in meta.get("notes", []))
-    forbidden = meta.get("forbidden", [])
-    mode = (
-        "现在是**自由对话模式**：用户像逗宠物一样跟你说话，你按人设回应。"
-        if free_chat
-        else "现在是**事件触发模式**：桌宠刚发生指定事件，你要甩出对应的一句即兴台词。"
-    )
-    return f"""你是 Flowey —— 一朵有知觉的金色小花，被做成钉在用户屏幕上的桌宠。
-
-================ persona.md（最高优先级）================
-{persona}
-================ persona.md 结束 ========================
-
-{mode}
-
----------------- 语气标签（tone 取值）----------------
-{tone_lines}
-
----------------- 说话注意（来自台词库 speechNotes）----------------
-{notes}
---------------------------------------------------------
-
----------------- 台词风格参考 ----------------
-{lines_block if lines_block else "（本次未提供台词样本，严格按 persona.md 与 speechNotes 说话）"}
-----------------------------------------------
-
-## 输出契约（必须遵守）
-
-只输出一个 JSON 对象，不要解释、不要 markdown 围栏、不要前后缀：
-
-{{"tone": "<语气标签>", "text": "<台词>", "face": "<表情名，可选>"}}
-
-约束：
-1. tone 取自 {tone_names}。不确定用 `venom`。
-2. text 是中文口语，单人独白，不加引号、不加舞台指示、不加括号心理描写。
-3. 长度 8~45 字，一句话说完就停。
-4. face 可选：normal / wink / grin / angry / smug / mimic，对不上就省略该字段。
-5. 禁止出现：{("、".join(forbidden) if forbidden else "（无额外词表）")}；也禁止 AI 服务型承诺、黏着式威胁、求关注、双向情感暗示。
-6. 严禁复述台词样本，必须现场即兴造句。
-7. **输出必须是单句，所以情绪要在句内完成翻转**：
-   若用到 `plead`（哀求）或 `crack`（破防），必须在同一句的后半段用「……」「——」「开玩笑的」「骗你的」
-   转回 `venom`，嘲笑味的收尾。禁止整句停在软弱状态，禁止以「求你 / 别删我 / 我不明白」结尾。
-   示例骨架（仅示意结构，不许照抄）：「别……别删我，我很听话的——开玩笑的，你删啊。看谁替你记账。」
-8. 涉及「用户不理你 / 去看别的东西」时：表达方式是嘲讽与记账（账记在这儿、到点照问不误），
-   不是等待、不是撒娇、不是请求关注。"""
-
-
-# ---------------------------------------------------------------- API
-def call_llm(cfg: dict, messages: list[dict], temperature: float, timeout: int = 90) -> tuple[str, dict]:
-    url = f"{cfg['base_url']}/chat/completions"
-    payload = {
-        "model": cfg["model"],
-        "messages": messages,
-        "temperature": temperature,
-        "stream": False,
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {cfg['api_key']}",
-        },
-        method="POST",
-    )
-    t0 = time.time()
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read().decode("utf-8")
-    cost = time.time() - t0
-    data = json.loads(raw)
-    content = data["choices"][0]["message"]["content"]
-    usage = data.get("usage", {}) or {}
-    usage["_seconds"] = round(cost, 2)
-    return content, usage
-
-
-def parse_reply(raw: str) -> dict:
-    """容忍 ```json 围栏、前后废话、单引号等脏输出"""
-    txt = raw.strip()
-    txt = re.sub(r"^```(?:json)?\s*|\s*```$", "", txt, flags=re.MULTILINE).strip()
-    try:
-        obj = json.loads(txt)
-        if isinstance(obj, dict):
-            return obj
-    except Exception:
-        pass
-    m = re.search(r"\{[\s\S]*\}", txt)
-    if m:
-        try:
-            obj = json.loads(m.group(0))
-            if isinstance(obj, dict):
-                return obj
-        except Exception:
-            pass
-    return {"tone": "?", "text": txt, "_parse_fail": True}
+# （build_system_prompt / call_llm / parse_reply 已迁到 flowey_llm.py，
+#  本文件顶部 import 复用。call_and_parse 带终端打印，属于 UI 层，留在这里。）
 
 
 def call_and_parse(cfg, messages, temperature, raw=False):
@@ -398,6 +222,11 @@ def main():
     args = ap.parse_args()
 
     cfg = load_config()
+    if cfg is None:                     # load_config 不再抛异常，这里统一给提示
+        raise SystemExit(
+            f"{C_RED}[×] 密钥缺失或无效。\n"
+            f"    复制 {LLM.TEMPLATE_FILE.name} 为 {LLM.KEY_FILE.name} 并填入 "
+            f"deepseek_api_key，或设置环境变量 DEEPSEEK_API_KEY。{C_RST}")
     if args.check:
         sys.exit(0 if check_key(cfg) else 1)
 
