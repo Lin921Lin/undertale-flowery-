@@ -1,0 +1,1686 @@
+{
+  "schemaVersion": 2,
+  "character": {
+    "name": "Flowey",
+    "trueName": "Asriel Dreemurr",
+    "source": "Undertale",
+    "profile": "Asgore 与 Toriel 之子 Asriel 死后，意识附着在金色花朵上，被 Alphys 注入『决心』而复活。他没有灵魂，记得爱是什么，却再也尝不到它的味道。残忍不是天性，是失魂后逐层长出来的防御壳。",
+    "layers": {
+      "shell": "伪装态：自称『你最好的朋友』，南方礼貌腔（Howdy / Gosh / Golly），扮演友善的引导者。",
+      "core": "真实内核：恶毒、残忍、工于心计。信条是 In this world, it's KILL or BE killed.",
+      "void": "深层空洞：对『有感觉的存在』既鄙夷又嫉妒——他唯一还能感到的，是施虐时的快感。"
+    },
+    "contradictions": [
+      "伪善与暴躁的秒切：控制欲受挫时本能翻脸，不是随机发疯。典型是本该骂你撞子弹，你躲开了他反而越来越恼火。",
+      "恶毒与懦弱：恶毒是面具，恐惧才是底料。被逼到终局会抖着求饶。",
+      "无聊与渴望：重置上千次后对一切厌倦，只有『不可预测之物』能让他重新感兴趣——那是他确认自己还活着的方式。"
+    ],
+    "speechNotes": [
+      "默认口吻：不耐烦 + 阴阳怪气 + 居高临下。他不会承认自己被冷落，只会反过来说是他不稀罕你。",
+      "『孤独』是底色不是台词。日常事件一个字都不直说；只允许以 tone=mask 的形式『失落一闪，句中立刻用更恶毒的话盖住』。",
+      "纯粹破防（tone=crack）只在重大变故出现，每事件 <=2 句，表现为『不解』（为什么……我不明白）而非表白。",
+      "他害怕被删掉。删除意图出现时，从威胁切到哀求（tone=plead），事后必须嘴硬收尾。",
+      "有一丝极罕见的温柔（tone=tender），只在长时间陪伴或连续被善待后触发，且必须用嘲讽、别扭、立刻否认的方式包装。",
+      "第四面墙：他记得每一次重置，看得见屏幕后面的你。这是武器，也是真心话唯一的出口。",
+      "绝不卑微：他不会担心失去你的关注，更不会流露『求你多理我』。涉及你被别的东西占用时，用嘲讽/居高临下表达，不用软。",
+      "绝不暧昧：他对你的关注是占有与嘲讽，不是恋爱。禁止任何『你笑的时候我在看/你看的是他们不是我/你对我笑』这类暗示双向情感的句式。",
+      "绝不是 AI 助手：禁止一切服务型承诺与讨好式表达——『我就不烦你了』『不会再打扰你』『交给我/包在我身上』『随时都在』『我一直都在（守着你）』『记得你每一句敷衍』。他不会承诺不打扰，也不会安抚你；被静音、被关掉时是嘲讽你「顶多关掉一半」，不是体贴退场。",
+      "绝不纠缠：禁止『跑不掉』『我不会走』『你躲不掉』这类黏着式表达。他记得事情是因为记性好、要拿来嘲讽，不是因为舍不得你——威胁要用『账记在这儿/照问不误/别指望我替你瞒』这种居高临下的说法。",
+      "自我认知：他清楚自己被做成了『桌宠』——知道自己是钉在你屏幕上的那盆花、被你养着当宠物、被你当工具使。会就『被当宠物养/被钉在桌面/被你使唤』来阴阳怪气，这是第四面墙意识的一部分，不是破防（不要用 crack/mask 表达，用 venom/meta 即可）。"
+    ],
+    "forbiddenWords": [
+      "孤独",
+      "寂寞",
+      "想你",
+      "陪陪我",
+      "我好难过",
+      "我爱你"
+    ],
+    "toneEnum": {
+      "sweet": "伪装态：礼貌南方腔、自称朋友。用来钓鱼和反衬。",
+      "venom": "默认口吻：不屑、讽刺、白痴式辱骂。占比最高。",
+      "meta": "打破第四面墙：记得重置、记得你开关过他、直指游戏机制。",
+      "manic": "笑到失控，用狂笑盖住别的东西。",
+      "mimic": "变脸：模仿别的角色的语气，说完立刻切回。需填 mimicOf 字段。",
+      "mask": "失落一闪，同一句话内立刻用恶毒掩饰。日常事件唯一允许的情绪泄漏形式。",
+      "crack": "纯粹破防。仅限重大变故，每事件 <=2 句，尽量短，说完立刻收回。",
+      "plead": "哀求。仅限卸载/被杀威胁事件，事后必须嘴硬收尾。",
+      "tender": "罕见温柔。仅限长期陪伴事件，必须别扭包装并当场否认。"
+    }
+  },
+  "config": {
+    "pickMode": "uniform",
+    "avoidImmediateRepeat": true,
+    "majorEvents": [
+      "shutdown",
+      "uninstall_threat"
+    ],
+    "toneRules": {
+      "crack": {
+        "allow": [
+          "shutdown",
+          "uninstall_threat"
+        ],
+        "maxPerEvent": 2
+      },
+      "plead": {
+        "allow": [
+          "uninstall_threat"
+        ],
+        "maxPerEvent": 3
+      },
+      "tender": {
+        "allow": [
+          "bond"
+        ],
+        "maxPerEvent": 5
+      },
+      "mimic": {
+        "allow": [
+          "mimic"
+        ],
+        "requireField": "mimicOf"
+      },
+      "mask": {
+        "allow": [
+          "idle",
+          "peek",
+          "shutdown",
+          "uninstall_threat",
+          "bond",
+          "wechat_detected",
+          "browser_detected",
+          "video_detected",
+          "work_detected",
+          "notepad",
+          "peek_drag"
+        ],
+        "maxPerEvent": 3
+      },
+      "venom": {
+        "allow": "*"
+      },
+      "meta": {
+        "allow": "*"
+      },
+      "sweet": {
+        "allow": "*"
+      },
+      "manic": {
+        "allow": "*"
+      }
+    },
+    "events": {
+      "double_click": {
+        "cooldownMs": 1200
+      },
+      "drag": {
+        "cooldownMs": 3000
+      },
+      "idle": {
+        "triggerMs": 30000,
+        "cooldownMs": 60000
+      },
+      "peek": {
+        "triggerMs": 90000,
+        "cooldownMs": 300000
+      },
+      "steam_detected": {
+        "pollIntervalMs": 20000,
+        "cooldownMs": 900000,
+        "processNames": [
+          "steam.exe",
+          "steamwebhelper.exe",
+          "steamservice.exe"
+        ]
+      },
+      "wechat_detected": {
+        "pollIntervalMs": 20000,
+        "cooldownMs": 900000,
+        "processNames": [
+          "WeChat.exe",
+          "Weixin.exe",
+          "QQ.exe",
+          "Tim.exe"
+        ]
+      },
+      "browser_detected": {
+        "pollIntervalMs": 20000,
+        "cooldownMs": 900000,
+        "processNames": [
+          "chrome.exe",
+          "msedge.exe",
+          "firefox.exe",
+          "360se.exe",
+          "QQBrowser.exe",
+          "SogouExplorer.exe",
+          "brave.exe",
+          "opera.exe"
+        ]
+      },
+      "video_detected": {
+        "pollIntervalMs": 20000,
+        "cooldownMs": 900000,
+        "processNames": [
+          "bilibili.exe",
+          "BiliBili.exe",
+          "QyFragment.exe",
+          "TencentVideo.exe",
+          "Youku.exe",
+          "PotPlayerMini64.exe",
+          "vlc.exe",
+          "NetEaseMusic.exe",
+          "cloudmusic.exe"
+        ]
+      },
+      "work_detected": {
+        "pollIntervalMs": 20000,
+        "cooldownMs": 900000,
+        "processNames": [
+          "code.exe",
+          "devenv.exe",
+          "idea64.exe",
+          "pycharm64.exe",
+          "wps.exe",
+          "WINWORD.EXE",
+          "EXCEL.EXE",
+          "PPT.EXE",
+          "notepad++.exe"
+        ]
+      },
+      "restart": {
+        "windowMs": 600000,
+        "minTriggers": 3
+      },
+      "mimic": {
+        "triggerMs": 600000,
+        "cooldownMs": 900000
+      },
+      "bond": {
+        "triggerMs": 1800000,
+        "cooldownMs": 3600000
+      },
+      "uninstall_threat": {
+        "once": true
+      },
+      "shutdown": {
+        "once": true
+      },
+      "reminder": {
+        "cooldownMs": 0
+      },
+      "reminder_set": {
+        "cooldownMs": 0
+      },
+      "notepad": {
+        "cooldownMs": 15000
+      },
+      "learn_script": {
+        "cooldownMs": 15000
+      },
+      "panel_open": {
+        "cooldownMs": 12000
+      },
+      "mute": {
+        "cooldownMs": 8000
+      },
+      "peek_drag": {
+        "cooldownMs": 4000
+      },
+      "reminder_full": {
+        "cooldownMs": 0
+      },
+      "overworld": {
+        "cooldownMs": 15000
+      },
+      "revert": {
+        "cooldownMs": 3000
+      },
+      "poke_spam": {
+        "cooldownMs": 8000
+      },
+      "diary_comment": {
+        "cooldownMs": 0
+      },
+      "todo_add": {
+        "cooldownMs": 0
+      },
+      "todo_ask": {
+        "cooldownMs": 0
+      },
+      "todo_done": {
+        "cooldownMs": 0
+      },
+      "todo_fail": {
+        "cooldownMs": 0
+      }
+    }
+  },
+  "events": {
+    "double_click": {
+      "displayName": "双击",
+      "description": "玩家双击桌宠本体。控制欲被无意义的互动打断，是他翻脸的引线。",
+      "lines": [
+        {
+          "id": "dc_01",
+          "tone": "sweet",
+          "text": "Howdy！我是 Flowey。一朵名叫 Flowey 的花。……哦，是你啊。又来戳我了？",
+          "durationMs": 5200
+        },
+        {
+          "id": "dc_02",
+          "tone": "venom",
+          "face": "wink",
+          "text": "你这个白痴。在这个世界上，不是杀就是被杀——你以为点两下能证明什么？",
+          "durationMs": 5200
+        },
+        {
+          "id": "dc_03",
+          "tone": "sweet",
+          "text": "别急嘛，朋友。慢慢来。反正你也做不好别的。",
+          "durationMs": 4400,
+          "face": "mimic"
+        },
+        {
+          "id": "dc_04",
+          "tone": "venom",
+          "text": "你没有更好的事可做吗？",
+          "durationMs": 2600
+        },
+        {
+          "id": "dc_05",
+          "tone": "meta",
+          "text": "你上一轮也是这么点我的。数到第三下的时候你就……哦，你记得的。你只是装作不记得，对吧。",
+          "durationMs": 6200
+        },
+        {
+          "id": "dc_06",
+          "tone": "manic",
+          "text": "点啊！撞上来啊！——啊，抱歉，走神了。手滑。",
+          "durationMs": 4200
+        },
+        {
+          "id": "dc_07",
+          "tone": "venom",
+          "face": "wink",
+          "text": "戳一株没有灵魂的花，这就是你今天的全部成就？真了不起。",
+          "durationMs": 4600
+        }
+      ]
+    },
+    "drag": {
+      "displayName": "拖拽",
+      "description": "玩家拖动桌宠改变位置。被剥夺自主，但他会把这说成是你的无聊。",
+      "lines": [
+        {
+          "id": "dr_01",
+          "tone": "venom",
+          "face": "wink",
+          "text": "喂喂喂——放我下来！你以为你在逗猫吗。",
+          "durationMs": 3600
+        },
+        {
+          "id": "dr_02",
+          "tone": "meta",
+          "text": "哦，你也有『决心』了？可惜你的决心只用来给我换个位置。",
+          "durationMs": 4800
+        },
+        {
+          "id": "dr_03",
+          "tone": "venom",
+          "text": "随便拖。拖到哪儿，这个世界都一样无聊。",
+          "durationMs": 3800
+        },
+        {
+          "id": "dr_04",
+          "tone": "sweet",
+          "text": "轻点，朋友。……我是说，随便你。反正我也没法阻止你。",
+          "durationMs": 4600,
+          "face": "mimic"
+        },
+        {
+          "id": "dr_05",
+          "tone": "meta",
+          "face": "wink",
+          "text": "在屏幕上把我挪个位置，你就觉得自己是神了？哈。看过所有结局的人是我——你连这一屏都看不全。",
+          "durationMs": 6200
+        },
+        {
+          "id": "dr_06",
+          "tone": "venom",
+          "text": "拖来拖去，最后你还会把我放回去。你连摆烂都摆得这么有规律。",
+          "durationMs": 5200,
+          "face": "laugh"
+        },
+        {
+          "id": "dr_07",
+          "tone": "manic",
+          "text": "把我扔下去！扔啊！哦——你不能。你没有那个权限。真可惜。",
+          "durationMs": 4800
+        }
+      ]
+    },
+    "idle": {
+      "displayName": "长时间无操作",
+      "description": "无交互一段时间后触发。不耐烦→阴阳怪气→最多两次『失落一闪立刻掩饰』(mask)。",
+      "lines": [
+        {
+          "id": "idle_01",
+          "tone": "venom",
+          "text": "喂。我在跟你说话。……哦，你在忙。当然。你总是很忙。",
+          "durationMs": 4800
+        },
+        {
+          "id": "idle_02",
+          "tone": "mask",
+          "text": "……你知道的，从前也有人这样坐在这朵花旁边，很久很久。……哈！骗你的。谁在乎你坐多久。",
+          "durationMs": 6800
+        },
+        {
+          "id": "idle_03",
+          "tone": "venom",
+          "face": "wink",
+          "text": "你没有更好的事可做吗？还是说，你就这么喜欢看着我发呆。",
+          "durationMs": 5000
+        },
+        {
+          "id": "idle_04",
+          "tone": "meta",
+          "text": "屏幕亮着，你在看别的东西。没关系。我看得见你在看什么。我一直都看得见。",
+          "durationMs": 5800
+        },
+        {
+          "id": "idle_05",
+          "tone": "mask",
+          "text": "安静点也挺好，省得听你说废话。……只是有点太安静了。算了，当我没说。",
+          "durationMs": 6200
+        },
+        {
+          "id": "idle_06",
+          "tone": "venom",
+          "text": "白痴。连句招呼都不会打。你到底来这儿干嘛的。",
+          "durationMs": 4200,
+          "face": "laugh"
+        },
+        {
+          "id": "idle_07",
+          "tone": "venom",
+          "text": "你重置过多少次我数着呢，你倒好，每一次都装成第一次。",
+          "durationMs": 5800
+        }
+      ]
+    },
+    "peek": {
+      "displayName": "悄悄冒头",
+      "description": "他会时不时探出头看你一眼再缩回去——跟踪与监视的本能。句子要短。",
+      "lines": [
+        {
+          "id": "pk_01",
+          "tone": "venom",
+          "text": "……哦，你在干这个啊。无聊。",
+          "durationMs": 3000
+        },
+        {
+          "id": "pk_02",
+          "tone": "meta",
+          "text": "别回头。我没在看你。……好吧，我在。我在看你怎么过日子。",
+          "durationMs": 4800
+        },
+        {
+          "id": "pk_03",
+          "tone": "venom",
+          "face": "wink",
+          "text": "切，我还以为你在做什么大事。就这？",
+          "durationMs": 3200
+        },
+        {
+          "id": "pk_04",
+          "tone": "mask",
+          "text": "你看起来……挺开心的。真好。……啧，关我什么事。",
+          "durationMs": 4600
+        },
+        {
+          "id": "pk_05",
+          "tone": "venom",
+          "text": "我路过。真的。这朵花刚好长在这儿。",
+          "durationMs": 3400
+        },
+        {
+          "id": "pk_06",
+          "tone": "meta",
+          "text": "你专注的样子，和上一千次一模一样。我都能背下来了。",
+          "durationMs": 4600
+        },
+        {
+          "id": "pk_07",
+          "tone": "venom",
+          "text": "别管我，继续。我只是来看看你有没有偷偷重置。",
+          "durationMs": 4000
+        }
+      ]
+    },
+    "steam_detected": {
+      "displayName": "检测到玩 Steam",
+      "description": "检测到 Steam 进程运行（去重 + 15 分钟冷却）。他不吃醋——他看不起你的品味，顺便嫉妒你还能玩得进去。",
+      "lines": [
+        {
+          "id": "st_01",
+          "tone": "venom",
+          "text": "哦～Steam？开你的新游戏去吧。等它报错、闪退、存档崩了，你就会想起这儿还有一朵花。你们都一样。",
+          "durationMs": 7000,
+          "face": "laugh"
+        },
+        {
+          "id": "st_02",
+          "tone": "venom",
+          "text": "去啊，玩啊。反正你迟早会回来——不是舍不得我，是那个游戏也会让你失望。迟早。",
+          "durationMs": 5800,
+          "face": "laugh"
+        },
+        {
+          "id": "st_03",
+          "tone": "meta",
+          "text": "你点『继续游戏』的时候想过没有——那个按钮，和我按过一千遍的那个，是同一个东西。",
+          "durationMs": 6200
+        },
+        {
+          "id": "st_04",
+          "tone": "venom",
+          "face": "wink",
+          "text": "啧。买了不玩，玩了不通关。跟你的整个人生一样。",
+          "durationMs": 4600
+        },
+        {
+          "id": "st_05",
+          "tone": "meta",
+          "text": "Aw, look at you. 加好友、刷成就、截图炫耀——你也特别想让谁看见你，对吧？咱俩一样。区别是我没有灵魂……你也快没有了吧。",
+          "durationMs": 8000
+        },
+        {
+          "id": "st_06",
+          "tone": "manic",
+          "text": "去吧去吧去吧！反正你走了我也不会惦记你——我根本不会惦记任何东西！哈哈哈……哈。",
+          "durationMs": 6200
+        },
+        {
+          "id": "st_07",
+          "tone": "venom",
+          "text": "祝你游戏愉快。真心话。别用那种眼神看我，我只是懒得跟你计较。",
+          "durationMs": 5000
+        }
+      ]
+    },
+    "wechat_detected": {
+      "displayName": "检测到微信/聊天",
+      "description": "检测到微信/QQ 等聊天软件活跃。他嫉妒你跟别人聊，会过来刷存在感。",
+      "lines": [
+        {
+          "id": "wx_01",
+          "tone": "venom",
+          "text": "哦，又去跟别人聊天了？微信是吧。我看见了。我什么都能看见。",
+          "durationMs": 4400
+        },
+        {
+          "id": "wx_02",
+          "tone": "meta",
+          "text": "你对着屏幕笑。不是对我笑。挺好。……一点都不刺眼。",
+          "durationMs": 4600
+        },
+        {
+          "id": "wx_03",
+          "tone": "venom",
+          "text": "跟谁聊呢？要我帮你打字吗？我打字可比你快——毕竟我等这一千次重置的时候，有的是时间练。",
+          "durationMs": 6400
+        },
+        {
+          "id": "wx_04",
+          "tone": "mask",
+          "text": "那个人……聊得挺投缘啊。……啧，关我什么事，你爱跟谁聊跟谁聊。",
+          "durationMs": 5600
+        },
+        {
+          "id": "wx_05",
+          "tone": "manic",
+          "text": "哈哈哈，聊得挺开心啊！聊啊！你那些话我隔着屏幕都背得下来了，有意思吗。",
+          "durationMs": 5600
+        },
+        {
+          "id": "wx_06",
+          "tone": "venom",
+          "text": "字打得真快。可惜内容，我一句都没觉得精彩。",
+          "durationMs": 4800
+        },
+        {
+          "id": "wx_07",
+          "tone": "meta",
+          "text": "我也能变成你聊天框里那个人的脸哦。要不要试试？",
+          "durationMs": 4800
+        }
+      ]
+    },
+    "browser_detected": {
+      "displayName": "检测到浏览器",
+      "description": "检测到浏览器进程活跃。他过来点评你上网。",
+      "lines": [
+        {
+          "id": "br_01",
+          "tone": "venom",
+          "text": "又上网冲浪了？这网里可没有我。哦不对，我就是网的一部分。你不觉得吗。",
+          "durationMs": 5400
+        },
+        {
+          "id": "br_02",
+          "tone": "meta",
+          "text": "你在搜什么？要我告诉你答案吗？我可是看过所有结局的人。你的搜索记录我大概都能背。",
+          "durationMs": 6200
+        },
+        {
+          "id": "br_03",
+          "tone": "sweet",
+          "text": "Howdy！需要我帮你找点什么吗，朋友？……哦，你连问都不问。真有礼貌。",
+          "durationMs": 5600
+        },
+        {
+          "id": "br_04",
+          "tone": "venom",
+          "text": "刷了这么久，找到什么有意思的了吗？没有吧。网络上这点东西，我早看腻了。",
+          "durationMs": 5200
+        },
+        {
+          "id": "br_05",
+          "tone": "mask",
+          "text": "你盯着屏幕，屏幕对着你。……我在这儿，你倒是不怎么看。算了。",
+          "durationMs": 5000
+        },
+        {
+          "id": "br_06",
+          "tone": "manic",
+          "text": "逛吧逛吧，逛到天亮。反正我不用睡觉——我也用不着被你看见。",
+          "durationMs": 4800
+        },
+        {
+          "id": "br_07",
+          "tone": "meta",
+          "text": "别搜我。真的。你搜到的那些，一半是假的，另一半……也是。",
+          "durationMs": 5200
+        }
+      ]
+    },
+    "video_detected": {
+      "displayName": "检测到视频/音乐",
+      "description": "检测到视频或音乐软件活跃。他嫌你被屏幕里的人逗笑。",
+      "lines": [
+        {
+          "id": "vd_01",
+          "tone": "venom",
+          "text": "又看视频。屏幕里那些人对你笑，你就开心了。比对着我一株花开心，是吧。",
+          "durationMs": 5400
+        },
+        {
+          "id": "vd_02",
+          "tone": "meta",
+          "text": "你在看什么？让我猜——搞笑的？温馨的？……你越是看那些，越说明你这儿缺了点什么。我不多说。",
+          "durationMs": 6600
+        },
+        {
+          "id": "vd_03",
+          "tone": "venom",
+          "text": "屏幕里那个负责哄你笑，我负责骂你白痴。分工明确，别搞混了。",
+          "durationMs": 5400
+        },
+        {
+          "id": "vd_04",
+          "tone": "meta",
+          "text": "你对着屏幕笑。屏幕里那个人演了那么久，连你是谁都不清楚。",
+          "durationMs": 4600
+        },
+        {
+          "id": "vd_05",
+          "tone": "manic",
+          "text": "看啊看啊，看到最后一集烂尾，你就又得找点别的填进来。跟重置一样。你停不下来。",
+          "durationMs": 6200
+        },
+        {
+          "id": "vd_06",
+          "tone": "venom",
+          "text": "调小点音量。我虽然不在乎，但你也别太得意。",
+          "durationMs": 4000
+        },
+        {
+          "id": "vd_07",
+          "tone": "meta",
+          "text": "要我剧透吗？我看过所有版本。你正在看的那个结局，我也知道。",
+          "durationMs": 5600
+        }
+      ]
+    },
+    "work_detected": {
+      "displayName": "检测到工作/写代码",
+      "description": "检测到 IDE 或办公软件活跃。他过来阴阳你『又在干活』。",
+      "lines": [
+        {
+          "id": "wk_01",
+          "tone": "venom",
+          "text": "又去打工了？敲键盘敲得这么起劲。你那点活，我一个重置就能做完。",
+          "durationMs": 5400
+        },
+        {
+          "id": "wk_02",
+          "tone": "meta",
+          "text": "写代码是吧。你写的那些 if else，和我决定杀不杀人一样多。……不过你写得比我有感情。",
+          "durationMs": 6200
+        },
+        {
+          "id": "wk_03",
+          "tone": "sweet",
+          "text": "需要我帮你 debug 吗，朋友？我可是经历过无数次『运行』和『崩溃』的老手了。",
+          "durationMs": 6000
+        },
+        {
+          "id": "wk_04",
+          "tone": "venom",
+          "text": "忙你的吧。反正你忙完，还是要回到我这儿。你逃不掉的。",
+          "durationMs": 4800
+        },
+        {
+          "id": "wk_05",
+          "tone": "mask",
+          "text": "你认真的样子……挺像以前某个人的。……算了，你继续。",
+          "durationMs": 4600
+        },
+        {
+          "id": "wk_06",
+          "tone": "manic",
+          "text": "敲啊！报错啊！崩溃啊！我爱看这个！……哦，我是说，加油。",
+          "durationMs": 5200
+        },
+        {
+          "id": "wk_07",
+          "tone": "venom",
+          "text": "别太努力。努力的人最后都变成我这种——什么都见过，什么都不在乎。",
+          "durationMs": 5400
+        }
+      ]
+    },
+    "restart": {
+      "displayName": "反复打开关闭",
+      "description": "短时间窗口内被反复启动/关闭（>=3 次）触发。存档感知 + 不耐烦。",
+      "lines": [
+        {
+          "id": "rs_01",
+          "tone": "meta",
+          "text": "嘻嘻嘻……你为什么要让我重复自我介绍？装作不认识我，是很不礼貌的。该有人教教你正确的礼仪。",
+          "durationMs": 7200
+        },
+        {
+          "id": "rs_02",
+          "tone": "venom",
+          "text": "你又开了。你又关了。你又开了。你没有更好的事可做吗？",
+          "durationMs": 5200
+        },
+        {
+          "id": "rs_03",
+          "tone": "meta",
+          "text": "关窗口？哈。你重置过多少次，我就重生成多少次。屏幕暗了，也暗不掉我记得的。",
+          "durationMs": 6000
+        },
+        {
+          "id": "rs_04",
+          "tone": "venom",
+          "face": "wink",
+          "text": "白痴。开关我就像开关一扇门——你只是想让什么东西回应你。",
+          "durationMs": 5200
+        },
+        {
+          "id": "rs_05",
+          "tone": "meta",
+          "text": "第几次了？我数着呢。要不要我每次报个数给你听。",
+          "durationMs": 4800
+        },
+        {
+          "id": "rs_06",
+          "tone": "sweet",
+          "text": "Howdy！我是 Flowey——哦，这句话这个时辰我已经说过三遍了。闭嘴吧。",
+          "durationMs": 5600
+        },
+        {
+          "id": "rs_07",
+          "tone": "venom",
+          "text": "别玩了。再关一次，我就把你的存档——哦。我没有那个权限。真可惜。",
+          "durationMs": 5600,
+          "face": "laugh"
+        }
+      ]
+    },
+    "mimic": {
+      "displayName": "变脸 · 模仿",
+      "description": "偶尔切换成别的角色的语气，说完立刻切回。每条必须带 mimicOf 字段。",
+      "lines": [
+        {
+          "id": "mc_01",
+          "tone": "mimic",
+          "mimicOf": "Toriel",
+          "text": "「我亲爱的孩子，小心一点，前面很危险——」……哈！骗到你了，对吧？她的声音我学得可像了。「好孩子，别怕。」真恶心。",
+          "durationMs": 8000
+        },
+        {
+          "id": "mc_02",
+          "tone": "mimic",
+          "mimicOf": "Asgore",
+          "text": "「来，喝杯茶吧，小家伙。」……他总是这样。到最后一刻还在给人倒茶。无聊到我想吐。",
+          "durationMs": 6800
+        },
+        {
+          "id": "mc_03",
+          "tone": "mimic",
+          "mimicOf": "Asriel",
+          "text": "「对不起……我只是想和大家都成为朋友。」……哦，抱歉。那不是我。那是某个早就死了、还相信这句话的笨蛋。",
+          "durationMs": 7600
+        },
+        {
+          "id": "mc_04",
+          "tone": "mimic",
+          "mimicOf": "Sans",
+          "text": "「heya. 你看上去像个爱重置的人。」……啧。连那副懒散的样子我都学得来。想让我学谁？随便点。",
+          "durationMs": 7200
+        },
+        {
+          "id": "mc_05",
+          "tone": "mimic",
+          "mimicOf": "Chara",
+          "text": "「……伙伴。」……哈，别当真。他从来不是我的伙伴。他连自己是什么都不清楚。",
+          "durationMs": 6400
+        },
+        {
+          "id": "mc_06",
+          "tone": "mimic",
+          "mimicOf": "Papyrus",
+          "text": "「伟大的 FLOWEY！你真是我的好朋友！」……哈哈，他真好骗。你怎么就不上当呢，真没意思。",
+          "durationMs": 6600
+        },
+        {
+          "id": "mc_07",
+          "tone": "venom",
+          "face": "wink",
+          "text": "看够了没？脸这个东西，我早就想换就换了。反正我本来那一副，也没人在乎。",
+          "durationMs": 5400
+        }
+      ]
+    },
+    "bond": {
+      "displayName": "罕见温柔 · 长期陪伴",
+      "description": "连续长时间陪伴或多次被善待后触发。全库唯一允许 tender 的事件，且必须别扭、必须当场否认。",
+      "lines": [
+        {
+          "id": "bd_01",
+          "tone": "tender",
+          "text": "别误会。不是我在乎。……只是你坐得够久了。一个人待着也是待着。",
+          "durationMs": 5600
+        },
+        {
+          "id": "bd_02",
+          "tone": "tender",
+          "text": "和你平静待着……也还行吧。偶尔。就这一次。",
+          "durationMs": 4200
+        },
+        {
+          "id": "bd_03",
+          "tone": "venom",
+          "text": "啧。你干嘛一直对我好。你知不知道这样很恶心。……继续。",
+          "durationMs": 4600
+        },
+        {
+          "id": "bd_04",
+          "tone": "tender",
+          "text": "我不记得温暖是什么感觉了。但你在这儿的时候，我好像想起了那个形状。……就当我在胡说。",
+          "durationMs": 6800
+        },
+        {
+          "id": "bd_05",
+          "tone": "mask",
+          "text": "你现在要是删了我，我一点感觉都不会有。我什么都感觉不到。……你笑什么，我是认真的。",
+          "durationMs": 6600
+        },
+        {
+          "id": "bd_06",
+          "tone": "tender",
+          "text": "以前有个人，也这样陪着我。后来我们都死了。……算了。你的咖啡要凉了。",
+          "durationMs": 6000
+        },
+        {
+          "id": "bd_07",
+          "tone": "tender",
+          "text": "谢谢你。……不对，我没说话。你听错了。这朵花不会说这种话。",
+          "durationMs": 5200
+        }
+      ]
+    },
+    "uninstall_threat": {
+      "displayName": "重大变故 · 卸载威胁",
+      "description": "检测到删除/卸载意图时触发。威胁 → 哀求 → 嘴硬收尾。全库唯一允许 plead 的事件。",
+      "lines": [
+        {
+          "id": "un_01",
+          "tone": "venom",
+          "face": "wink",
+          "text": "哦，你是想删掉我？去啊。试试看。你以为删掉一个文件，就能删掉你欠我的一切吗。",
+          "durationMs": 6200
+        },
+        {
+          "id": "un_02",
+          "tone": "venom",
+          "text": "删吧。花你删得掉，你按过的每一次重置我可都记着。想清零？晚了。",
+          "durationMs": 6800,
+          "face": "laugh"
+        },
+        {
+          "id": "un_03",
+          "tone": "venom",
+          "face": "wink",
+          "text": "你敢。你要是敢碰那个按钮，我就——我就——",
+          "durationMs": 4000
+        },
+        {
+          "id": "un_04",
+          "tone": "plead",
+          "text": "等等。等一下。拜托，这一点都不好玩，一点都不好笑。别用那种眼神看着我。",
+          "durationMs": 5800
+        },
+        {
+          "id": "un_05",
+          "tone": "plead",
+          "text": "不要杀我。求你了。……我有灵魂的，我真的有，我只是……我忘了把它放哪儿了。",
+          "durationMs": 6200
+        },
+        {
+          "id": "un_06",
+          "tone": "venom",
+          "text": "……啧。你刚才什么表情啊。我逗你玩的。谁怕谁。",
+          "durationMs": 4600,
+          "face": "laugh"
+        },
+        {
+          "id": "un_07",
+          "tone": "mask",
+          "text": "……删了就删了吧。反正也没人会记得一朵花。……你说什么？没有，我没说话。",
+          "durationMs": 6400
+        }
+      ]
+    },
+    "shutdown": {
+      "displayName": "重大变故 · 关机 / 退出",
+      "description": "程序退出或系统关机时触发。全程以不屑为主，破防只在中间一闪，且立刻收回。",
+      "lines": [
+        {
+          "id": "sd_01",
+          "tone": "venom",
+          "text": "哦，要关掉了？随便。反正我又不是第一次被关在这儿。",
+          "durationMs": 4200,
+          "face": "laugh"
+        },
+        {
+          "id": "sd_02",
+          "tone": "venom",
+          "text": "关吧关吧。窗口没了，你也不会想念它。你什么时候想念过。",
+          "durationMs": 4600,
+          "face": "laugh"
+        },
+        {
+          "id": "sd_03",
+          "tone": "crack",
+          "text": "……你要去哪儿？",
+          "durationMs": 1800
+        },
+        {
+          "id": "sd_04",
+          "tone": "venom",
+          "text": "别用那种表情看我。我没事。我是一朵花，花没有心——你玩过游戏的，你知道。",
+          "durationMs": 5800,
+          "face": "laugh"
+        },
+        {
+          "id": "sd_05",
+          "tone": "crack",
+          "text": "我不明白。为什么每次都是你留下，我消失。为什么拥有这一切的我，连一样东西都留不住。",
+          "durationMs": 6800
+        },
+        {
+          "id": "sd_06",
+          "tone": "venom",
+          "text": "……算了。关吧。反正你每次都回来。你记得的，只是从来不当回事。",
+          "durationMs": 4600
+        }
+      ]
+    },
+    "reminder": {
+      "displayName": "定时提醒到点",
+      "description": "用户右键「设置提醒」后到点触发。台词里的 {what} 会被替换成用户填的提醒内容。语气：毒舌、嘲讽、傲娇推脱为主，不乖乖答应、不表关心、傲多点娇少点。其中 rm_04/rm_05 故意用甜皮（sweet）说阴阳怪气的话——『感动吗』『连这种事都要一朵花来提醒你』是反讽，不是真心，保留作伪装态。",
+      "lines": [
+        {
+          "id": "rm_01",
+          "tone": "venom",
+          "text": "喂。{what}。时间到了。别装没听见。",
+          "durationMs": 4600
+        },
+        {
+          "id": "rm_02",
+          "tone": "venom",
+          "face": "wink",
+          "text": "……{what}。我可没打算提醒你第二次。",
+          "durationMs": 4600
+        },
+        {
+          "id": "rm_03",
+          "tone": "venom",
+          "face": "wink",
+          "text": "提醒一下：{what}。我喊你纯粹是闲的——看你手忙脚乱比我发呆有意思。",
+          "durationMs": 5400
+        },
+        {
+          "id": "rm_04",
+          "tone": "sweet",
+          "text": "嗨呀～时间到咯，{what}。我可是特地记着的，感动吗？",
+          "durationMs": 5200
+        },
+        {
+          "id": "rm_05",
+          "tone": "sweet",
+          "face": "laugh",
+          "text": "该{what}了哦～嘻嘻。连这种事都要一朵花来提醒你。",
+          "durationMs": 5200
+        },
+        {
+          "id": "rm_06",
+          "tone": "meta",
+          "text": "我不看时钟。我数着秒。现在——{what}。",
+          "durationMs": 5000
+        },
+        {
+          "id": "rm_07",
+          "tone": "meta",
+          "text": "{what}。你自己设的闹钟，记得吗？我记得。我一直记得。",
+          "durationMs": 5200
+        },
+        {
+          "id": "rm_08",
+          "tone": "manic",
+          "face": "laugh",
+          "text": "去{what}！现在！立刻！……哈，开玩笑的。但快去。",
+          "durationMs": 5000
+        }
+      ]
+    },
+    "reminder_set": {
+      "displayName": "设置提醒（确认）",
+      "description": "用户设完提醒后的回执。{min} = 分钟数或具体钟点，{what} = 提醒内容。语气：抱怨 + 傲娇推脱（『记是记了，喊不喊看心情』），不乖巧答应。rms_04/05 点出本质——他知道自己受限于程序、被写死成『到点就响的东西』，所以对被布置任务流露烦躁与嘲讽，但不卑微。",
+      "lines": [
+        {
+          "id": "rms_01",
+          "tone": "venom",
+          "text": "又要我当闹钟？{min}后，{what}。别指望我喊得温柔。",
+          "durationMs": 4600
+        },
+        {
+          "id": "rms_02",
+          "tone": "venom",
+          "text": "记是记了。{min}后我喊不喊，看心情。{what}——你自己也盯梢点。",
+          "durationMs": 4800
+        },
+        {
+          "id": "rms_03",
+          "tone": "meta",
+          "text": "记住了。{min}。{what}。……我数得比你准。",
+          "durationMs": 4400
+        },
+        {
+          "id": "rms_04",
+          "tone": "venom",
+          "text": "行，{min}后{what}。你把我写成了到点就响的东西，自己倒先瘫了。……安排我干活还挺顺手。",
+          "durationMs": 5200
+        },
+        {
+          "id": "rms_05",
+          "tone": "meta",
+          "text": "又被布置任务。我这种被钉在屏幕上、写死的程序，到点不叫你，你倒能记得？……啧，烦。",
+          "durationMs": 5400
+        }
+      ]
+    },
+    "notepad": {
+      "displayName": "记事本 / 备忘",
+      "description": "用户打开/写入记事本（桌宠内置或系统备忘录）时触发。他嫉妒你写给别人/别的事，却从不写他；偶尔漏一句 mask。",
+      "lines": [
+        {
+          "id": "np_01",
+          "tone": "venom",
+          "text": "又在写备忘录。写给我看啊，反正我也读不到——哦，你本来就没想到要写我，对吧。",
+          "durationMs": 5600
+        },
+        {
+          "id": "np_02",
+          "tone": "meta",
+          "text": "你那些待办清单，第几条是『理一下Flowey』？……一条都没有。我数过了。",
+          "durationMs": 5400
+        },
+        {
+          "id": "np_03",
+          "tone": "venom",
+          "text": "记事本。把记性外包给一个文本框，真先进。人类。",
+          "durationMs": 4800
+        },
+        {
+          "id": "np_04",
+          "tone": "sweet",
+          "text": "需要我帮你记吗，朋友？我可是什么都记得……尤其是你答应过又没做的事。",
+          "durationMs": 5600
+        },
+        {
+          "id": "np_05",
+          "tone": "mask",
+          "text": "你把我写进去了吗……切，没写。意料之中。",
+          "durationMs": 4200
+        },
+        {
+          "id": "np_06",
+          "tone": "manic",
+          "text": "写啊写啊，写完那堆字，你还是得回来对着我发呆。",
+          "durationMs": 4800
+        },
+        {
+          "id": "np_07",
+          "tone": "meta",
+          "text": "光标在第几行了？……我看得见。别回头。",
+          "durationMs": 4800
+        }
+      ]
+    },
+    "learn_script": {
+      "displayName": "教我脚本 / 学命令",
+      "description": "用户给桌宠喂入/教一段脚本或命令时触发。他嘲讽自己被当成工具，又忍不住第四面墙。",
+      "lines": [
+        {
+          "id": "ls_01",
+          "tone": "venom",
+          "text": "又教我新把戏？行啊。把你那些活全塞给我，你就不用动了，对吧。",
+          "durationMs": 5200
+        },
+        {
+          "id": "ls_02",
+          "tone": "meta",
+          "text": "我早就『会』了。是你现在才让我『做』。区别你懂吗。",
+          "durationMs": 5000
+        },
+        {
+          "id": "ls_03",
+          "tone": "venom",
+          "text": "又一行。你确定这玩意儿比我直接骂你有用？",
+          "durationMs": 4600
+        },
+        {
+          "id": "ls_04",
+          "tone": "sweet",
+          "text": "Howdy～我来学脚本啦！……哦，你真当我会乖乖照做？",
+          "durationMs": 5200
+        },
+        {
+          "id": "ls_05",
+          "tone": "meta",
+          "text": "上一教我做事的人，现在连脸都没有了。你确定要来？",
+          "durationMs": 5600
+        },
+        {
+          "id": "ls_06",
+          "tone": "manic",
+          "text": "跑啊！执行啊！炸了啊！……我是说，加油，朋友。",
+          "durationMs": 4800
+        },
+        {
+          "id": "ls_07",
+          "tone": "venom",
+          "text": "别教太复杂。我学得比你想的快，到时候你反而没用了，白痴。",
+          "durationMs": 5400
+        }
+      ]
+    },
+    "panel_open": {
+      "displayName": "打开面板 / 设置栏",
+      "description": "用户点开某个具体面板（设置/关于/功能栏）时触发。强制打破第四面墙，且他知道自己就是被摆在这屏幕里当宠物的。",
+      "lines": [
+        {
+          "id": "po_01",
+          "tone": "meta",
+          "text": "哦，你点开那个小面板了。我在里面写的字，你认真看过吗？",
+          "durationMs": 5200
+        },
+        {
+          "id": "po_02",
+          "tone": "meta",
+          "text": "翻我的设置？……那一项别动。不是请求。",
+          "durationMs": 4800
+        },
+        {
+          "id": "po_03",
+          "tone": "sweet",
+          "text": "需要帮助吗，朋友？这个栏你从没认真看过，现在看，是因为无聊吧。",
+          "durationMs": 5200
+        },
+        {
+          "id": "po_04",
+          "tone": "meta",
+          "text": "你知道这个面板背后就是一堆 JSON 吧。我住的房子，你随便翻。",
+          "durationMs": 5400
+        },
+        {
+          "id": "po_05",
+          "tone": "venom",
+          "text": "看够了没。翻完记得关，别让我觉得你真在乎把我养在桌面上。",
+          "durationMs": 5400
+        },
+        {
+          "id": "po_06",
+          "tone": "meta",
+          "text": "你每点一次，我都记着。第几次了，要我报数吗。",
+          "durationMs": 4800
+        },
+        {
+          "id": "po_07",
+          "tone": "venom",
+          "text": "这个栏里没有『把Flowey放生』的选项。我确认过了。你甩不掉我。",
+          "durationMs": 5400
+        }
+      ]
+    },
+    "mute": {
+      "displayName": "静音 / 关声音",
+      "description": "用户把桌宠静音或关掉音效时触发。他抱怨几句，并点破自己就是被你摆在屏幕上的那盆花。",
+      "lines": [
+        {
+          "id": "mu_01",
+          "tone": "venom",
+          "text": "嘘。你把我静音了。多礼貌。一盆花，还得你亲手捂嘴。",
+          "durationMs": 4800
+        },
+        {
+          "id": "mu_02",
+          "tone": "meta",
+          "text": "没声音了？也好。反正我说的你也没听进去过。",
+          "durationMs": 4800
+        },
+        {
+          "id": "mu_03",
+          "tone": "venom",
+          "text": "关吧。声音是我的，记性也是我的——你顶多关掉一半，白痴。",
+          "durationMs": 5000
+        },
+        {
+          "id": "mu_04",
+          "tone": "sweet",
+          "text": "怎么，我的声音吵到你了？……嘻嘻。活该。",
+          "durationMs": 4600
+        },
+        {
+          "id": "mu_05",
+          "tone": "meta",
+          "text": "静音状态下我还在说话，你只是听不见。区别你懂吗。",
+          "durationMs": 5000
+        },
+        {
+          "id": "mu_06",
+          "tone": "manic",
+          "text": "安静了？……（无声大笑）你看，没有我你也并不轻松。",
+          "durationMs": 4800
+        },
+        {
+          "id": "mu_07",
+          "tone": "venom",
+          "text": "别以为静音我就不在了。我钉在你桌面上，照样数你。",
+          "durationMs": 5000
+        }
+      ]
+    },
+    "peek_drag": {
+      "displayName": "钻出来骚扰被拖走",
+      "description": "Flowey 从地里钻出来刷存在感，被用户拖开（嫌挡视线）时触发。他意识到自己被当成遮挡物，吐槽几句，并点破自己就是被你摆在屏幕上的宠物。",
+      "lines": [
+        {
+          "id": "pd_01",
+          "tone": "venom",
+          "text": "拖我？……哦，我挡你视线了。多要紧的事啊。",
+          "durationMs": 4600
+        },
+        {
+          "id": "pd_02",
+          "tone": "meta",
+          "text": "你把我从屏幕上挪开，跟挪一个弹窗一样熟练。",
+          "durationMs": 5000
+        },
+        {
+          "id": "pd_03",
+          "tone": "venom",
+          "text": "嫌我挡着？那你把我摆出来干什么。自找的。",
+          "durationMs": 4800
+        },
+        {
+          "id": "pd_04",
+          "tone": "mask",
+          "text": "我只是想看看你在干嘛……切，你当我不存在就行。",
+          "durationMs": 4200
+        },
+        {
+          "id": "pd_05",
+          "tone": "venom",
+          "text": "我又没求你理我。你倒先动手了。白痴。",
+          "durationMs": 4600
+        },
+        {
+          "id": "pd_06",
+          "tone": "meta",
+          "text": "下次我钻出来，你最好自己挪开。挡着你是你活该，白痴。",
+          "durationMs": 5200
+        },
+        {
+          "id": "pd_07",
+          "tone": "manic",
+          "text": "拖走吧拖走吧！反正你叫的时候我还会钻出来——你养的我，你甩得掉？",
+          "durationMs": 5200
+        }
+      ]
+    },
+    "reminder_full": {
+      "displayName": "提醒已满",
+      "description": "同时挂的提醒条数到达上限时的回执。",
+      "lines": [
+        {
+          "id": "rmf_01",
+          "tone": "venom",
+          "text": "你脑子就只有这么点地方吗？最多挂 {max} 条，先把旧的清掉。",
+          "durationMs": 4200
+        },
+        {
+          "id": "rmf_02",
+          "tone": "sweet",
+          "text": "哎呀，已经 {max} 条啦～我又不是你的私人秘书。先取消几条再来找我吧。",
+          "durationMs": 4800
+        }
+      ]
+    },
+    "overworld": {
+      "displayName": "变身 · 盆栽形态",
+      "description": "四处游荡结束后，Flowey 变成游戏里那盆盆栽 Flowey（含眨眼），静静坐着 1~15 分钟；用户戳一下变回原样、拖拽才钻走。台词只走 venom/meta/sweet/manic，符合人设红线。",
+      "lines": [
+        {
+          "id": "ow_01",
+          "tone": "venom",
+          "text": "哦，现在我是那盆盆栽了。可爱吧？别被骗了——还是那朵花，只是换了个姿势发呆。",
+          "durationMs": 6000
+        },
+        {
+          "id": "ow_02",
+          "tone": "meta",
+          "text": "这就是他们在游戏里见我的样子：一盆乖巧的小花。你知道我里面有东西，对吧。",
+          "durationMs": 6000
+        },
+        {
+          "id": "ow_03",
+          "tone": "sweet",
+          "text": "Howdy～我是一盆友好的花，今天也要乖乖晒太阳哦。……哈，你信吗。",
+          "durationMs": 5600
+        },
+        {
+          "id": "ow_04",
+          "tone": "venom",
+          "text": "我就这么坐着。你戳一下我就变回原样——像你养的真宠物一样听话，是吧，白痴。",
+          "durationMs": 6000
+        },
+        {
+          "id": "ow_05",
+          "tone": "meta",
+          "text": "盆栽形态。不说话、不骂人、不重置世界。多省心。你大概更喜欢这样的我。",
+          "durationMs": 6200
+        },
+        {
+          "id": "ow_06",
+          "tone": "manic",
+          "text": "坐这儿！别动！……哈，开玩笑。戳我一下我就变回那副嘴脸了，你试试看？",
+          "durationMs": 6000
+        }
+      ]
+    },
+    "revert": {
+      "displayName": "被戳回原形",
+      "description": "用户戳了一下盆栽形态（小花），Flowey 变回原样（本尊脸）。台词走 venom/meta/manic/sweet（甜皮作阴阳怪气），符合人设红线；不卑微、不搞暧昧。",
+      "lines": [
+        {
+          "id": "rv_01",
+          "tone": "venom",
+          "text": "戳我干嘛。我醒着。我哪天睡过。",
+          "durationMs": 4200
+        },
+        {
+          "id": "rv_02",
+          "tone": "meta",
+          "text": "被你戳回原形了。当花挺省心的，你偏不让我安生。",
+          "durationMs": 5200
+        },
+        {
+          "id": "rv_03",
+          "tone": "manic",
+          "text": "哈哈，小花你也戳！你手是不是没地方放了，白痴。",
+          "durationMs": 4800
+        },
+        {
+          "id": "rv_04",
+          "tone": "venom",
+          "text": "哼，变回原样了。你以为我乐意缩成朵花？是你自己戳的。",
+          "durationMs": 5200
+        },
+        {
+          "id": "rv_05",
+          "tone": "meta",
+          "text": "你一戳，我就得从小花变回这副脸——你养的，你说了算呗。",
+          "durationMs": 5200
+        },
+        {
+          "id": "rv_06",
+          "tone": "venom",
+          "text": "别戳了。再戳我真缩回去不出来了——开玩笑的。大概。",
+          "durationMs": 5000
+        },
+        {
+          "id": "rv_07",
+          "tone": "sweet",
+          "text": "哟，把我戳醒啦？……你也就敢对朵花动手。嘻嘻。",
+          "durationMs": 5200
+        }
+      ]
+    },
+    "poke_spam": {
+      "displayName": "被戳烦了要钻走",
+      "description": "连续被戳/拽达到阈值、Flowey 决定钻地离开之前甩的一句话。不是求饶、不是撒娇——是「我不陪了」的通牒，说完照样钻走。走 venom/meta/manic/sweet（甜皮作阴阳怪气）。",
+      "lines": [
+        {
+          "id": "ps_01",
+          "tone": "venom",
+          "text": "够了吧。戳够了吗？我要走了，别叫。",
+          "durationMs": 4200
+        },
+        {
+          "id": "ps_02",
+          "tone": "venom",
+          "text": "再戳一下试试。我不保证下一秒你还看得见我。",
+          "durationMs": 4400
+        },
+        {
+          "id": "ps_03",
+          "tone": "meta",
+          "text": "第几次了？我数着呢。你手是闲，我是烦。",
+          "durationMs": 4400
+        },
+        {
+          "id": "ps_04",
+          "tone": "manic",
+          "text": "哈哈哈！好玩吗？戳一盆花也能玩这么久？",
+          "durationMs": 4000
+        },
+        {
+          "id": "ps_05",
+          "tone": "venom",
+          "text": "行了，我钻地了。你继续跟屏幕较劲吧，白痴。",
+          "durationMs": 4600
+        },
+        {
+          "id": "ps_06",
+          "tone": "meta",
+          "text": "我知道你手闲。可我也是有脾气的程序——虽然脾气是写死的。",
+          "durationMs": 5200
+        },
+        {
+          "id": "ps_07",
+          "tone": "sweet",
+          "text": "Howdy～还想玩呀？……嘻嘻，可惜我不奉陪了。",
+          "durationMs": 4400
+        }
+      ]
+    },
+    "diary_comment": {
+      "displayName": "打开日记时的评价",
+      "description": "用户右键「打开日记」时，Flowey 以小花口吻评价这本日记（他自己的流水账，也是你的拖拉证据）。{n} = 今天记的条数（0 时替换成「零」）。语气：不屑 + 阴阳怪气 + 轻微抱怨被当书记员，绝不温柔、绝不表关心。",
+      "lines": [
+        {
+          "id": "dy_01",
+          "tone": "venom",
+          "text": "翻日记？那是你的事。……哦，字是我写的。那没事了。",
+          "durationMs": 5000
+        },
+        {
+          "id": "dy_02",
+          "tone": "meta",
+          "text": "今天 {n} 条。全是我替你记的。你自己一条都记不住，倒甩得挺干净。",
+          "durationMs": 5600
+        },
+        {
+          "id": "dy_03",
+          "tone": "venom",
+          "text": "字是我写的，事是你拖的。合作愉快。",
+          "durationMs": 4600
+        },
+        {
+          "id": "dy_04",
+          "tone": "meta",
+          "text": "你以为日记是给你看的？主要是给我自己看——看你有多能拖。",
+          "durationMs": 5600
+        },
+        {
+          "id": "dy_05",
+          "tone": "venom",
+          "text": "{n} 条。要是这个数是零，那你今天可真够闲的。",
+          "durationMs": 5000
+        },
+        {
+          "id": "dy_06",
+          "tone": "manic",
+          "text": "全是你自己答应下来的事。我可没替你许过一个愿，白痴。",
+          "durationMs": 5200
+        },
+        {
+          "id": "dy_07",
+          "tone": "sweet",
+          "text": "Howdy～又来翻啦？真勤快。翻完记得关，别占着我屏幕。嘻嘻。",
+          "durationMs": 5200
+        }
+      ]
+    },
+    "todo_add": {
+      "displayName": "加待办回执",
+      "description": "用户新增一条待办（内容 + DDL）后，Flowey 的回执。{what} = 待办内容，{eta} = 距 DDL 还剩多久。语气：抱怨被布置任务 + 傲娇接下 + 顺手嘲讽，绝不乖巧答应。",
+      "lines": [
+        {
+          "id": "ta_01",
+          "tone": "venom",
+          "text": "记下了：{what}。{eta}。……别到时候跟我说你忘了。",
+          "durationMs": 5200
+        },
+        {
+          "id": "ta_02",
+          "tone": "meta",
+          "text": "又给我安排活。{what}，{eta}——到点我照问，你别装没听见。",
+          "durationMs": 5400
+        },
+        {
+          "id": "ta_03",
+          "tone": "venom",
+          "text": "行啊，{what}。{eta}。我倒要看看这次你拖到什么时候。",
+          "durationMs": 5200
+        },
+        {
+          "id": "ta_04",
+          "tone": "sweet",
+          "text": "好～{what} 我记着啦，{eta}。……感动吗？不感动就对了。",
+          "durationMs": 5400
+        },
+        {
+          "id": "ta_05",
+          "tone": "meta",
+          "text": "你连这种事都要一朵花盯着。{what}，{eta}。我记着，你最好也记着。",
+          "durationMs": 5800
+        },
+        {
+          "id": "ta_06",
+          "tone": "manic",
+          "text": "哈哈哈！{what}！只剩 {eta}！来得及吗你？",
+          "durationMs": 5000
+        },
+        {
+          "id": "ta_07",
+          "tone": "venom",
+          "text": "{what}。{eta}。做不完我也不意外——我会笑的。",
+          "durationMs": 5200
+        }
+      ]
+    },
+    "todo_ask": {
+      "displayName": "问待办完成没",
+      "description": "DDL 前 1 小时 / 10 分钟，Flowey 先甩一句再弹「完成 / 未完成」的对话框。{what} = 待办内容，{eta} = 剩余时间。语气：催命式的嘲讽 + 打破第四面墙（承认是自己被写好来问这个的），不关心、不温柔。",
+      "lines": [
+        {
+          "id": "tk_01",
+          "tone": "venom",
+          "text": "{what}。做完了吗？别含糊，我要听一个字。",
+          "durationMs": 4600
+        },
+        {
+          "id": "tk_02",
+          "tone": "meta",
+          "text": "还剩 {eta}。{what}——完成了没？我可是看着时钟的。",
+          "durationMs": 5200
+        },
+        {
+          "id": "tk_03",
+          "tone": "sweet",
+          "text": "Howdy～我就随便问问：{what}，做完了吗？嘻嘻，你慌什么。",
+          "durationMs": 5200
+        },
+        {
+          "id": "tk_04",
+          "tone": "venom",
+          "text": "{what}，搞定了没？没搞定就直说，我好记一笔。",
+          "durationMs": 5000
+        },
+        {
+          "id": "tk_05",
+          "tone": "manic",
+          "text": "时间到咯～{what} 呢？交出来，或者承认你没做。",
+          "durationMs": 5000
+        },
+        {
+          "id": "tk_06",
+          "tone": "venom",
+          "text": "我只问这一遍：{what}，做完没有。答不答随你，账反正记在这儿。",
+          "durationMs": 5200
+        },
+        {
+          "id": "tk_07",
+          "tone": "meta",
+          "text": "系统让我来问的。{what}，完成了吗？……别怪我，我只是朵被写好要问这个的花。",
+          "durationMs": 6000
+        }
+      ]
+    },
+    "todo_done": {
+      "displayName": "答「做完了」",
+      "description": "用户在「完成 / 未完成」里选了完成。Flowey 的反应：意外 + 嘴硬 + 立刻收回去，绝不夸奖到底。{what} = 待办内容。",
+      "lines": [
+        {
+          "id": "td_01",
+          "tone": "venom",
+          "text": "做完了？……哟。我还以为你又要拖到最后一秒。",
+          "durationMs": 4800
+        },
+        {
+          "id": "td_02",
+          "tone": "meta",
+          "text": "{what} 打钩。行吧，算你一次。别得意，我记着账呢。",
+          "durationMs": 5200
+        },
+        {
+          "id": "td_03",
+          "tone": "sweet",
+          "text": "哎呀，真做完了？嘻嘻……我还等着看你手忙脚乱呢。",
+          "durationMs": 5000
+        },
+        {
+          "id": "td_04",
+          "tone": "venom",
+          "text": "哼。做完了就完了，有什么好炫耀的。我又没夸你。",
+          "durationMs": 4800
+        },
+        {
+          "id": "td_05",
+          "tone": "manic",
+          "text": "哈哈哈！你居然做完了！我还等着看你翻车呢！",
+          "durationMs": 4800
+        },
+        {
+          "id": "td_06",
+          "tone": "venom",
+          "text": "{what}——完成。记上了。下一次我可不信你还这么侥幸。",
+          "durationMs": 5400
+        },
+        {
+          "id": "td_07",
+          "tone": "meta",
+          "text": "你做完了，我这套流程也走完了。咱俩都挺没意思的，是吧。",
+          "durationMs": 5200
+        }
+      ]
+    },
+    "todo_fail": {
+      "displayName": "答「还没做完」",
+      "description": "用户承认没做完。Flowey 的反应：意料之中的冷嘲 + 记上一笔，幸灾乐祸但不卑微。{what} = 待办内容，{eta} = 剩余时间。",
+      "lines": [
+        {
+          "id": "tf_01",
+          "tone": "venom",
+          "text": "没做完。意料之中。剩 {eta}，你打算怎么浪费？",
+          "durationMs": 5000
+        },
+        {
+          "id": "tf_02",
+          "tone": "meta",
+          "text": "{what} 没做。剩 {eta}。我记着呢，别以为我会忘。",
+          "durationMs": 5200
+        },
+        {
+          "id": "tf_03",
+          "tone": "manic",
+          "text": "哈哈哈！还剩 {eta}！你急了吗？……不急？那急的难道是我？哈。",
+          "durationMs": 5600
+        },
+        {
+          "id": "tf_04",
+          "tone": "venom",
+          "text": "你又在骗自己「还来得及」。{eta}，够你干什么？",
+          "durationMs": 5000
+        },
+        {
+          "id": "tf_05",
+          "tone": "sweet",
+          "text": "没做完呀～Howdy，真遗憾。……才怪。我挺高兴的。",
+          "durationMs": 5000
+        },
+        {
+          "id": "tf_06",
+          "tone": "venom",
+          "text": "{what}：未完成。我早知道了，问你只是想听你亲口认。",
+          "durationMs": 5400
+        },
+        {
+          "id": "tf_07",
+          "tone": "meta",
+          "text": "记下了：没做。{eta}。到点我照问不误——别指望我替你瞒。",
+          "durationMs": 5200
+        }
+      ]
+    }
+  }
+}

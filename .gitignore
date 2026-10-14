@@ -1,0 +1,47 @@
+# ===== 私密凭据：绝不提交 =====
+secrets.local.json
+secrets.local.*
+*.local.json
+*.local.txt
+*.local.env
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.secret
+config.local.*
+
+# ===== 调试脚本产物 =====
+chat_logs/
+_llm_debug_*.txt
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# ===== 临时文件 =====
+_thumb_*
+~$*
+Thumbs.db
+
+# ===== 系统 =====
+.DS_Store
+desktop.ini
+
+# ===== 运行期数据 / 临时产物（不进仓库）=====
+# 自动生成的个人日记（运行时数据）
+flowey_diary.txt
+# 贴图调试预览、对比图等临时 PNG
+_*.png
+# 版本截图
+v89_*.png
+# 临时重命名备份
+*.mine
+
+# ===== 工具/IDE 内部数据 =====
+# WorkBuddy 项目记忆、技能等工作区元数据
+.workbuddy/
