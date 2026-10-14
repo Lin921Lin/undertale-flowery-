@@ -1030,6 +1030,10 @@ class TodoCheckDialog(QDialog):
             p.end()
             lab.setPixmap(pm)
 
+    def choice(self):
+        """回答结果：True=完成 / False=未完成 / None=没回答（Esc）。"""
+        return self._choice
+
     def _pick(self, i):
         self._sel = i
         self._refresh()
@@ -1038,6 +1042,22 @@ class TodoCheckDialog(QDialog):
     def _confirm(self):
         self._choice = (self._sel == 0)
         self.accept()
+
+    def hideEvent(self, ev):
+        # 关键：装在 QApplication 上的全局事件过滤器必须在窗口销毁前摘掉，
+        # 否则 C++ 对象被回收后任意按键都会打到悬空 filter 上 -> 段错误崩溃。
+        self._unhook_filter()
+        super().hideEvent(ev)
+
+    def closeEvent(self, ev):
+        self._unhook_filter()
+        super().closeEvent(ev)
+
+    def _unhook_filter(self):
+        try:
+            QApplication.instance().removeEventFilter(self)
+        except Exception:
+            pass
 
     def showEvent(self, ev):
         super().showEvent(ev)
@@ -1051,9 +1071,12 @@ class TodoCheckDialog(QDialog):
         self.setFocus(Qt.OtherFocusReason)
 
     def eventFilter(self, obj, ev):
-        if ev.type() == QEvent.KeyPress and (obj is self or self.isAncestorOf(obj)):
-            self.keyPressEvent(ev)
-            return True
+        # 全局过滤器会收到发给「任意对象」的事件（QApplication / QTimer 等
+        # 非 QWidget 也会进来），必须先判断类型，否则 isAncestorOf 抛 TypeError。
+        if ev.type() == QEvent.KeyPress and isinstance(obj, QWidget):
+            if obj is self or self.isAncestorOf(obj):
+                self.keyPressEvent(ev)
+                return True
         return super().eventFilter(obj, ev)
 
     def mousePressEvent(self, ev):
@@ -1159,6 +1182,21 @@ class ConvoChoiceDialog(QDialog):
         super().exec_()
         return self._choice
 
+    def hideEvent(self, ev):
+        # 销毁前摘掉全局事件过滤器，避免悬空 filter 导致后续按键段错误
+        self._unhook_filter()
+        super().hideEvent(ev)
+
+    def closeEvent(self, ev):
+        self._unhook_filter()
+        super().closeEvent(ev)
+
+    def _unhook_filter(self):
+        try:
+            QApplication.instance().removeEventFilter(self)
+        except Exception:
+            pass
+
     def showEvent(self, ev):
         super().showEvent(ev)
         # 同 TodoCheckDialog：Qt.Tool 无边框窗弹出后要强制抢焦点，否则键盘失灵
@@ -1170,9 +1208,12 @@ class ConvoChoiceDialog(QDialog):
         self.setFocus(Qt.OtherFocusReason)
 
     def eventFilter(self, obj, ev):
-        if ev.type() == QEvent.KeyPress and (obj is self or self.isAncestorOf(obj)):
-            self.keyPressEvent(ev)
-            return True
+        # 同 TodoCheckDialog：全局过滤器会收到非 QWidget 对象的事件，
+        # 必须先做 isinstance 判断，否则 isAncestorOf 抛 TypeError。
+        if ev.type() == QEvent.KeyPress and isinstance(obj, QWidget):
+            if obj is self or self.isAncestorOf(obj):
+                self.keyPressEvent(ev)
+                return True
         return super().eventFilter(obj, ev)
 
     def mousePressEvent(self, ev):
@@ -2591,12 +2632,8 @@ class FloweyPet(QWidget):
         return found[0] if found else None
 
     def _diary_popup(self, said, _attempt=0):
-        """记事本打开后：把花挪到日记簿上沿「探出个脑袋」，再说那句批注。
+        """记事本打开后：把花挪到日记簿正上方（整个悬在窗口上沿之外），再说那句批注。
 
-        定位不是整个悬空飘在窗口上方，而是让花的
-          · 上面 60% 露在记事本上边线之上
-          · 下面 40% 压在日记页面里
-        看起来就像从本子里探头出来。
         said 为 None 时只做「重新定位」（重试时不再重复说话）。
         """
         rect = self._find_window_rect("flowey_diary", class_name="Notepad")
@@ -2606,10 +2643,9 @@ class FloweyPet(QWidget):
             w, h = self.width(), self.height()
             x = (left + right) // 2 - w // 2
             x = max(scr.left() + 8, min(x, scr.right() - w - 8))
-            # 探头上沿：60% 露在外面，40% 压在页面上
-            y = top - int(h * 0.6)
-            if y < scr.top() + 8:           # 上方放不下就翻到下方，同理探头
-                y = bottom - int(h * 0.4)
+            y = top - h - 12                    # 整个浮在日记簿上方
+            if y < scr.top() + 8:               # 上方放不下就翻到下方
+                y = bottom + 12
             self.move(x, y)
             self.raise_()
         if said is not None and not self._quitting:
@@ -2821,12 +2857,6 @@ class FloweyPet(QWidget):
         if (now - self._last_interaction >= neglect_ms
                 and now - self._last_wander >= WANDER_COOLDOWN_MS):
             self._start_wander(now)
-
-        # 空闲够久 -> 主动搭话（AI）。受总开关与冷却双重限制，不会刷屏。
-        if (self._convo_auto and not self._convo_active
-                and now - self._last_interaction >= CONVO_IDLE_MS
-                and now - self._convo_last >= CONVO_COOLDOWN_MS):
-            self._start_convo()
 
     # ------------------------------------------------------------------
     # 冷落游荡：钻地 -> 屏幕上几处冒头看看 -> 到鼠标光标旁说话
@@ -3240,8 +3270,6 @@ class FloweyPet(QWidget):
             return
         if chosen is acts["say"]:
             self._random_chat()
-        elif chosen is acts["convo"]:
-            QTimer.singleShot(0, self._start_convo)
         elif chosen is acts["music"]:
             self._bgm_toggle(acts["music"].isChecked())
         elif chosen is acts["sfx"]:
@@ -3320,13 +3348,6 @@ class FloweyPet(QWidget):
         menu.setStyleSheet(MENU_QSS)
 
         a_say = QAction("说点什么", self)
-        a_convo = QAction("聊两句（AI）", self)   # 立刻开一轮：翻待办 + 点评你在干嘛
-        a_convo_auto = QAction("自动搭话", self)   # 空闲久了自动开口（关闭则只手动）
-        a_convo_auto.setCheckable(True)
-        a_convo_auto.setChecked(self._convo_auto)
-        a_convo_auto.triggered.connect(
-            lambda _checked: setattr(self, "_convo_auto",
-                                     a_convo_auto.isChecked()))
         a_music = QAction("音乐：%s" % ("开" if self._music_on else "关"), self)
         a_music.setCheckable(True)
         a_music.setChecked(self._music_on)
@@ -3389,8 +3410,6 @@ class FloweyPet(QWidget):
                     lambda _c, rid=t["id"]: self._cancel_todo(rid))
 
         menu.addAction(a_say)
-        menu.addAction(a_convo)
-        menu.addAction(a_convo_auto)
         if remind_menu is not None:
             menu.addAction(remind_menu.menuAction())
         menu.addAction(a_remind)
@@ -3403,7 +3422,7 @@ class FloweyPet(QWidget):
         menu.addAction(a_hush)
         menu.addSeparator()
         menu.addAction(a_quit)
-        return menu, {"say": a_say, "convo": a_convo, "music": a_music,
+        return menu, {"say": a_say, "music": a_music,
                       "sfx": a_sfx, "hush": a_hush, "quit": a_quit,
                       "stealth": a_stealth, "auto": a_auto}
 
